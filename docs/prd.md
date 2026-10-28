@@ -1,7 +1,7 @@
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
 ## Web Apps — Sekolah Pelayaran Indonesia
 
-**Versi:** 1.4 — Draft (konsistensi nama, peran, dashboard, dan istilah; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
+**Versi:** 1.5 — Draft (kunci stack + kebijakan operasional; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
 **Status:** Draft untuk review dan validasi
 **Perusahaan pengembang:** PT Kodeintekno Cipta Solusi
 **Stakeholder utama:** Pak Mulya / Pak Mulyana
@@ -9,6 +9,10 @@
 **Target penyelesaian:** 19 Februari 2027
 **Platform:** Responsive Web Application
 **Arsitektur komunikasi:** REST API
+**Stack front-end:** Next.js (React + TypeScript)
+**Stack back-end:** NestJS (TypeScript)
+**Database:** PostgreSQL
+**Alasan pemilihan:** satu bahasa (TypeScript) untuk front-end dan back-end sehingga Rafi (Backend) dan Khenzo (Front-End) memakai kontrak tipe yang sama; NestJS memberi struktur modular untuk 4 peran, RBAC, dan audit; PostgreSQL andal untuk relasi hierarki Kategori → Kursus → Bab → Materi, hasil assessment, dan kebutuhan audit/retensi; ekosistem managed hosting PostgreSQL memudahkan backup dan pemulihan pada VPS server mitra.
 **Lokasi pilot / fokus khusus:** Pembelajaran Siswa Maritim
 **Dasar dokumen:** Scope Confirmation No. PPA/MLY-SC/VIII/2026 dan Proposal Project Awal No. PPA/MLY-EL/VIII/2026, kode MLY-E01
 **Sumber acuan tim & jadwal:** Workbook `Maritim Team & Timeline.xlsx` — 4 sheet: `Executive Summary`, `Breaf & Team`, `Project Timeline` (WBS 0.1–5.4, Gantt M1–M21), `Deliverable & Scope Log` (DLV-01–DLV-12)
@@ -24,7 +28,7 @@ Web Apps — Sekolah Pelayaran Indonesia merupakan platform pembelajaran digital
 
 Platform ini dirancang untuk mengintegrasikan materi pembelajaran berdasarkan klasifikasi jenis kapal, pembelajaran bersama mentor secara real-time, evaluasi kompetensi berstandar maritim internasional (acuan STCW / Maritime Trainer), video pembelajaran, serta pemantauan perkembangan belajar dalam satu sistem.
 
-Aplikasi dikembangkan sebagai sistem proprietary (custom) yang kepemilikannya diatur dalam MOU/kontrak kerja resmi, sehingga pengelolaan sistem dapat disesuaikan dengan kebutuhan institusi tanpa beban biaya lisensi berulang per pengguna dari platform e-learning umum.
+Aplikasi dikembangkan sebagai sistem proprietary (custom) yang kepemilikannya diatur dalam MOU/kontrak kerja resmi, sehingga pengelolaan sistem dapat disesuaikan dengan kebutuhan institusi tanpa beban biaya lisensi berulang per pengguna dari platform e-learning umum. Kode sumber, domain, merek, dan infrastruktur diatur dalam MOU; sedangkan seluruh konten pembelajaran (materi kurikulum, bank soal, dan video pembelajaran) adalah milik klien (Pak Mulya) — tim pengembang hanya mengelola dan menampilkannya sesuai hak akses.
 
 ## 1.2 Permasalahan
 
@@ -69,7 +73,9 @@ Target numerik untuk performa, ketersediaan, dan kapasitas pengguna perlu diteta
 
 # 2. Target Pengguna
 
-Peran yang didukung: Superadmin, Admin, Mentor, dan Taruna (sesuai `detail_fase_pekerjaan_SPI.md` Fase 1–2). Superadmin memegang hak akses tertinggi, termasuk pengelolaan akun dan penyerahan hak akses utama (Superadmin, hosting, domain) saat handover.
+Peran yang didukung: Superadmin, Admin, Mentor, dan Taruna (sesuai `detail_fase_pekerjaan_SPI.md` Fase 1–2). Superadmin memegang hak akses tertinggi, termasuk pengelolaan akun dan penyerahan hak akses utama (Superadmin, hosting, domain) saat handover. "Support" bukan peran sistem tersendiri: yang dimaksud dengan label "Admin/Support" pada fitur ticketing adalah pengguna berperar Admin yang menangani tiket.
+
+Bahasa antarmuka default adalah Bahasa Indonesia. Kebutuhan aksesibilitas minimum (kontras warna yang terbaca, navigasi keyboard, dan label yang ramah pembaca layar) diterapkan pada halaman utama; kebutuhan multi-bahasa atau aksesibilitas lanjutan di luar itu masuk Change Request.
 
 ## 2.1 Taruna
 
@@ -167,10 +173,10 @@ Sistem harus menyediakan mekanisme autentikasi untuk mengidentifikasi pengguna d
 - FR-AUTH-02: Sistem memvalidasi kredensial melalui back-end.
 - FR-AUTH-03: Sistem membedakan peran Superadmin, Admin, Mentor, dan Taruna.
 - FR-AUTH-04: Pengguna hanya dapat mengakses endpoint sesuai hak aksesnya.
-- FR-AUTH-05: Sistem menyediakan mekanisme logout dan invalidasi sesi atau token sesuai rancangan autentikasi.
-- FR-AUTH-06: Sistem menangani kredensial salah tanpa membocorkan informasi sensitif.
+- FR-AUTH-05: Sistem menyediakan mekanisme logout dan invalidasi sesi atau token sesuai rancangan autentikasi. Access token kedaluwarsa maksimal 1 jam; refresh token kedaluwarsa maksimal 30 hari, dipakai satu kali (rotasi) dan dicabut saat logout. Pengguna dapat memakai maksimal 3 perangkat bersamaan; login perangkat ke-4 mencabut sesi terlama. Superadmin dapat mencabut paksa (forced logout) sesi pengguna mana pun.
+- FR-AUTH-06: Sistem menangani kredensial salah tanpa membocorkan informasi sensitif. Password minimal 8 karakter dengan kombinasi huruf dan angka. Akun dikunci sementara 15 menit setelah 5 kali percobaan login gagal berturut-turut. Alur lupa password memakai tautan reset via email yang kedaluwarsa 1 jam dan hanya berlaku satu kali pakai.
 - FR-AUTH-07: Sistem menyediakan mekanisme pemulihan akun sesuai kebijakan yang disepakati.
-- FR-AUTH-08: Sistem menyediakan 2FA via Email/OTP untuk akun Mentor dan Taruna.
+- FR-AUTH-08: Sistem menyediakan 2FA via Email/OTP untuk akun Mentor dan Taruna. Kode OTP 6 digit kedaluwarsa 5 menit, maksimal 5 kali percobaan per kode, kirim ulang (resend) dibatasi 1 kali per 60 detik. Bila email gagal terkirim 3 kali berturut-turut, akun dikunci sementara 15 menit dan kejadian dicatat di audit log.
 - FR-AUTH-09: Sistem membatasi percobaan autentikasi untuk mengurangi risiko penyalahgunaan.
 - FR-AUTH-10: Perubahan peran dan status akun harus dilakukan oleh pihak yang berwenang.
 
@@ -182,7 +188,7 @@ Sistem harus menyediakan mekanisme autentikasi untuk mengidentifikasi pengguna d
 - Pengguna tidak dapat mengakses endpoint khusus peran lain tanpa izin.
 - Token atau sesi yang tidak valid tidak dapat digunakan untuk mengakses data terlindungi.
 
-**Keputusan yang masih diperlukan:** mekanisme pemulihan akun dan kebijakan kedaluwarsa sesi. Metode 2FA ditetapkan via Email/OTP sesuai `detail_fase_pekerjaan_SPI.md` Fase 2.
+**Keputusan yang masih diperlukan:** mekanisme pemulihan akun selain reset via email. Metode 2FA ditetapkan via Email/OTP sesuai `detail_fase_pekerjaan_SPI.md` Fase 2; parameter sesi, password, dan OTP ditetapkan pada FR-AUTH-05, FR-AUTH-06, dan FR-AUTH-08.
 
 ## 4.2 Modul Pembelajaran Berdasarkan Jenis Kapal
 
@@ -221,11 +227,11 @@ Penjadwalan Live Lesson dilakukan oleh Mentor/Admin. Integrasi menggunakan link 
 
 ### Kebutuhan
 
-- FR-LIVE-01: Sistem menyimpan informasi kelas dan jadwal.
+- FR-LIVE-01: Sistem menyimpan informasi kelas dan jadwal. Perubahan jadwal (reschedule/pembatalan) hanya dapat dilakukan oleh Mentor/Admin pemilik kelas, paling lambat H-1 sebelum sesi, dan memicu pemberitahuan ke peserta terdaftar.
 - FR-LIVE-02: Kelas dapat dikaitkan dengan mentor dan kategori pembelajaran.
 - FR-LIVE-03: Taruna dapat melihat kelas yang tersedia baginya.
 - FR-LIVE-04: Mentor dapat mengelola kelas sesuai kewenangannya; penjadwalan Live Lesson dilakukan oleh Mentor/Admin.
-- FR-LIVE-05: Sistem menyediakan informasi waktu, status, tautan kelas, serta absensi dan akses masuk sesi live bagi taruna bila diperlukan.
+- FR-LIVE-05: Sistem menyediakan informasi waktu, status, tautan kelas, serta absensi dan akses masuk sesi live bagi taruna bila diperlukan. Absensi tercatat otomatis saat taruna masuk sesi live; Mentor dapat mengoreksi manual; rekap kehadiran per kelas dapat dilihat Mentor/Admin dan diekspor; absensi ditutup otomatis 24 jam setelah sesi berakhir.
 - FR-LIVE-06: Akses kelas dibatasi berdasarkan hak akses dan ketentuan partisipasi.
 - FR-LIVE-07: Sistem menangani perubahan jadwal dan status kelas.
 
@@ -256,7 +262,7 @@ Sistem menyediakan ujian berjenjang lima level dalam format Computer Based Test 
 - FR-ASSESS-06: Sistem menghitung hasil sesuai aturan penilaian: penilaian otomatis (auto-grading) untuk pilihan ganda dan form input nilai manual oleh mentor/pemeriksa untuk esai.
 - FR-ASSESS-07: Sistem menyimpan percobaan, jawaban, nilai, dan waktu pengerjaan sesuai kebutuhan.
 - FR-ASSESS-08: Sistem mencatat progres pada setiap level.
-- FR-ASSESS-09: Sistem menerapkan syarat kelulusan atau pembukaan level berikutnya berdasarkan aturan yang disepakati, termasuk logika unlock materi/sertifikat berdasarkan kelulusan level.
+- FR-ASSESS-09: Sistem menerapkan syarat kelulusan atau pembukaan level berikutnya berdasarkan aturan yang disepakati, termasuk logika unlock materi/sertifikat berdasarkan kelulusan level. Aturan default per level: passing grade 70, maksimal 3 kali percobaan, jeda minimal 24 jam antar percobaan, remedial berupa pengulangan level dari awal; klien mengonfirmasi atau mengubah angka ini pada Fase 1.
 - FR-ASSESS-10: Sistem menyediakan ringkasan hasil kepada taruna dan pengguna berwenang.
 - FR-ASSESS-11: Bank soal disediakan oleh klien dan dimasukkan ke sistem melalui mekanisme yang disepakati.
 
@@ -270,7 +276,7 @@ Sistem menyediakan ujian berjenjang lima level dalam format Computer Based Test 
 - Kunci jawaban tidak terekspos kepada pengguna melalui API sebelum atau selama pengerjaan.
 - Percobaan pengerjaan tidak menghasilkan data duplikat yang tidak diinginkan.
 
-**Keputusan yang masih diperlukan:** passing grade, jumlah percobaan, batas waktu, urutan level, pengacakan soal, dan aturan remedial. Format soal (pilihan ganda dan esai), timer, auto-grading, dan penilaian manual mengikuti `detail_fase_pekerjaan_SPI.md` Fase 3.
+**Keputusan yang masih diperlukan:** konfirmasi atau perubahan angka default pada FR-ASSESS-09, urutan level, dan pengacakan soal. Format soal (pilihan ganda dan esai), timer, auto-grading, dan penilaian manual mengikuti `detail_fase_pekerjaan_SPI.md` Fase 3.
 
 ## 4.5 Rating, Feedback, dan Sertifikat Digital
 
@@ -282,7 +288,7 @@ Sistem menyediakan ujian berjenjang lima level dalam format Computer Based Test 
 - FR-REVIEW-02: Sistem menyimpan feedback mentor atau peserta sesuai alur yang disepakati.
 - FR-REVIEW-03: Sistem menghubungkan rating dan feedback dengan kelas atau aktivitas yang relevan.
 - FR-REVIEW-04: Sistem dapat menampilkan ringkasan rating yang sah.
-- FR-REVIEW-05: Sistem menerbitkan sertifikat digital apabila persyaratan kelulusan level terpenuhi (termasuk logika unlock sertifikat berdasarkan kelulusan).
+- FR-REVIEW-05: Sistem menerbitkan sertifikat digital dalam format PDF apabila persyaratan kelulusan level terpenuhi (termasuk logika unlock sertifikat berdasarkan kelulusan). Setiap sertifikat memiliki nomor unik; klien memutuskan sebelum Fase 3 apakah diperlukan halaman verifikasi publik (misalnya kode QR) atau cukup PDF tanpa verifikasi publik.
 - FR-REVIEW-06: Data sertifikat harus mengacu pada pengguna dan hasil yang benar.
 - FR-REVIEW-07: Sistem mencegah penerbitan sertifikat berulang yang tidak sesuai aturan.
 
@@ -345,7 +351,7 @@ Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus �
 
 ### Kebutuhan
 
-- FR-VIDEO-01: Sistem menyimpan metadata video (termasuk thumbnail) dan referensi ke penyedia hosting.
+- FR-VIDEO-01: Sistem menyimpan metadata video (termasuk thumbnail) dan referensi ke penyedia hosting. Thumbnail dibatasi maksimal 2 MB dengan format JPG/PNG dan dimensi maksimal 1920×1080; berkas yang diunggah divalidasi server-side (tipe MIME dan ukuran) dan dipindai antivirus/malware sebelum disimpan.
 - FR-VIDEO-02: Video dikaitkan dalam hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video.
 - FR-VIDEO-03: Taruna dapat membuka video yang berhak diaksesnya melalui pemutar dengan proteksi tautan (secured stream/HLS).
 - FR-VIDEO-04: Sistem menangani video yang tidak tersedia atau gagal dimuat.
@@ -393,31 +399,33 @@ Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus �
 - Validasi input dilakukan di sisi back-end (sanitasi input sebagai proteksi XSS & SQL Injection).
 - Sistem menerapkan prinsip least privilege.
 - Kunci jawaban dan informasi sensitif tidak boleh terekspos ke front-end.
-- Sistem harus membatasi akses terhadap data pribadi dan data pembelajaran.
+- Sistem harus membatasi akses terhadap data pribadi dan data pembelajaran sesuai UU PDP: data dikumpulkan seperlunya atas persetujuan, subjek data berhak mengakses dan meminta penghapusan, dan insiden kebocoran dilaporkan sesuai ketentuan yang berlaku.
 - Aktivitas penting seperti perubahan peran dan pengelolaan nilai perlu mempunyai audit trail sesuai kebutuhan.
+- Audit log dan hasil assessment disimpan minimal 5 tahun (mengikuti masa retensi dokumen pendidikan); data hasil dan audit tidak dihapus permanen (soft delete) kecuali atas permintaan penghapusan data pribadi yang disetujui. Penghapusan permanen hanya dapat dilakukan oleh Superadmin dan tercatat di audit log.
 - Rahasia aplikasi dan kredensial layanan pihak ketiga harus disimpan di konfigurasi aman, bukan di repository.
 - Dependensi dan konfigurasi produksi perlu diperiksa sebelum deployment.
 - Pengamanan database dan code refactoring/code optimization dilakukan pada Fase 4–5 sebelum Go-Live.
 
 ## 5.2 Performa
 
-Target performa harus ditentukan melalui diskusi teknis dan pengujian beban.
+Target awal (dikonfirmasi ulang pada Fase 1 berdasarkan estimasi jumlah taruna):
 
 Rekomendasi awal untuk divalidasi:
+- Kapasitas awal: 500 pengguna terdaftar dengan 100 pengguna bersamaan (concurrent).
 - Respons endpoint biasa ditargetkan memiliki waktu respons persentil ke-95 di bawah 500 ms pada kondisi pengujian yang disepakati.
 - Endpoint laporan atau proses berat boleh memiliki target terpisah.
 - Query database perlu dioptimalkan untuk menghindari pengambilan data berlebihan.
 - Daftar data yang berpotensi besar harus mendukung pagination.
 - Pemutaran video tidak boleh membebani server aplikasi dengan mengalirkan file secara langsung jika penyedia video pihak ketiga digunakan.
 
-Angka tersebut merupakan usulan awal, bukan SLA yang sudah disetujui.
+Angka tersebut merupakan usulan awal, bukan SLA yang sudah disetujui. Angka final (concurrent users, p95, uptime) ditetapkan pada Fase 1 dan menjadi kriteria UAT.
 
 ## 5.3 Kompatibilitas
 
 - Aplikasi dapat digunakan melalui browser desktop dan mobile.
 - Layout harus responsif (diverifikasi pada Mobile Browser, Tablet, dan Desktop saat Fase 5).
 - API menggunakan format JSON untuk pertukaran data, kecuali integrasi tertentu membutuhkan format lain.
-- Format waktu, zona waktu, dan representasi tanggal harus konsisten.
+- Format waktu, zona waktu, dan representasi tanggal harus konsisten: penyimpanan memakai ISO 8601 UTC; tampilan dan operasional memakai WIB (UTC+7).
 
 ## 5.4 Backup dan Pemulihan
 
@@ -425,6 +433,7 @@ Angka tersebut merupakan usulan awal, bukan SLA yang sudah disetujui.
 - SOP backup harus terdokumentasi dan dapat diaudit klien.
 - Tim harus menentukan cakupan backup, lokasi penyimpanan, retensi, dan prosedur pemulihan.
 - Keberhasilan backup perlu diverifikasi.
+- Uji pemulihan (restore) dilakukan minimal 1 kali per kuartal sebelum Go-Live dan 1 kali per semester setelah Go-Live; hasil uji didokumentasikan sebagai syarat penerimaan SOP backup.
 - Frekuensi backup yang lebih tinggi harus dipertimbangkan jika risiko kehilangan data menuntutnya.
 
 ## 5.5 Pemeliharaan
@@ -439,15 +448,16 @@ Definisi bug, revisi minor, waktu respons dukungan, dan pengecualian layanan har
 
 ## 6.1 Komponen Utama
 
-1. **Front-End Web App:** antarmuka pengguna yang dikembangkan oleh Khenzo.
-2. **Back-End REST API:** logika bisnis, autentikasi, validasi, dan akses data yang dikembangkan oleh Rafi.
-3. **Database:** penyimpanan pengguna, peran, materi, kursus/bab/video, kelas, assessment, hasil, progres, tiket, dan sertifikat.
+1. **Front-End Web App:** Next.js (React + TypeScript) — antarmuka pengguna yang dikembangkan oleh Khenzo.
+2. **Back-End REST API:** NestJS (TypeScript) — logika bisnis, autentikasi, validasi, dan akses data yang dikembangkan oleh Rafi.
+3. **Database:** PostgreSQL — penyimpanan pengguna, peran, materi, kursus/bab/video, kelas, assessment, hasil, progres, tiket, dan sertifikat.
 4. **Video Hosting Provider:** penyedia penyimpanan dan pemutaran video pihak ketiga (opsi: AWS S3, Vimeo, atau Cloudflare Stream sesuai anggaran PKS), diakses via secured stream/HLS.
 5. **External Live Lesson Service:** penjadwalan oleh Mentor/Admin; integrasi link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API, tergantung kesepakatan spesifik PKS).
 6. **Email Service:** layanan pengiriman email untuk kode 2FA via Email/OTP kepada Mentor dan Taruna.
 7. **Production Infrastructure:** VPS production pada server mitra Kodeintekno, repository Git dengan konfigurasi CI/CD dasar, database server, domain, SSL, logging, dan automated backup.
+8. **Monitoring & Error Tracking:** log aplikasi terpusat, pelacakan error production (misalnya Sentry atau setara), dan peringatan (alert) untuk kegagalan kritis (downtime, gagal backup, lonjakan error 5xx).
 
-Arsitektur dasar (ERD, flowchart, user journey Superadmin/Admin/Mentor/Taruna) ditetapkan pada Fase 1 sebelum pengembangan.
+Arsitektur dasar (ERD, flowchart, user journey Superadmin/Admin/Mentor/Taruna) ditetapkan pada Fase 1 sebelum pengembangan. Migrasi database memakai migrasi berversion (versioned migrations) dengan seed data untuk dev/staging; promosi staging ke production mensyaratkan BAST lolos dan tidak ada bug kritis; rollback memakai snapshot backup terakhir yang terverifikasi.
 
 ## 6.2 Prinsip REST API
 
@@ -562,10 +572,10 @@ Entitas berikut merupakan kandidat untuk model database. Struktur dan relasi fin
 | Audit Logs | Catatan aktivitas penting |
 
 Aturan penting:
-- Password tidak disimpan sebagai teks biasa.
+- Password tidak disimpan sebagai teks biasa (hashing satu arah; parameter pada FR-AUTH-06).
 - Kunci jawaban tidak boleh dikirim dalam payload soal yang diterima taruna.
 - Relasi data harus menjaga konsistensi pengguna, materi, kelas, dan hasil ujian.
-- Penghapusan data yang berhubungan dengan hasil atau audit perlu mempertimbangkan kebutuhan riwayat dan kebijakan retensi.
+- Data hasil assessment dan audit memakai soft delete; penghapusan permanen hanya oleh Superadmin dan tercatat di audit log. Retensi minimal 5 tahun (lihat §5.1); permintaan penghapusan data pribadi mengikuti UU PDP.
 - Data pribadi hanya dikumpulkan sejauh diperlukan oleh produk.
 
 ---
@@ -694,10 +704,10 @@ Catatan pemetaan: penamaan fase pada sheet `Project Timeline` (Fase 1: UI/UX & S
 | 0.2 | Pencairan Milestone 1 — uang muka / DP | Bukti bayar DP & invoice lunas | M1 | Not Started |
 | 0.3 | Kick-off meeting resmi (PMO Kodeintekno, tim internal, & Pak Mulya) | Berita acara kick-off & jalur komunikasi | M1 | Not Started |
 | 1.1 | Requirements gathering & diskusi spesifikasi kurikulum / modul kadet taruna dan business logic (kurikulum kapal, spesifikasi 5 level ujian, alur kelas) — materi disiapkan Klien | Dokumen kebutuhan fungsional & kurikulum | M1–M2 | Not Started |
-| 1.2 | Perancangan arsitektur sistem (REST API front-end & back-end) & skema database, termasuk spesifikasi jaminan keamanan; keluaran meliputi ERD, flowchart, user journey (Superadmin, Admin, Mentor, Taruna), dan outline dokumentasi API | Dokumen spesifikasi teknis & REST API | M2–M3 | Not Started |
+| 1.2 | Perancangan arsitektur sistem (REST API NestJS + PostgreSQL, front-end Next.js) & skema database, termasuk spesifikasi jaminan keamanan; keluaran meliputi ERD, flowchart, user journey (Superadmin, Admin, Mentor, Taruna), dan outline dokumentasi API | Dokumen spesifikasi teknis & REST API | M2–M3 | Not Started |
 | 1.3 | Wireframe (low fidelity: dashboard, kelas, modul video, ujian) & prototype desain UI/UX interaktif high fidelity (Superadmin, Admin, Mentor, Taruna; Figma/Adobe XD) menyesuaikan identitas Sekolah Pelayaran Indonesia, responsive desktop & mobile browser; design review & approval tertulis oleh klien | Prototype desain UI/UX | M2–M4 | Not Started |
 | 1.4 | Review, verifikasi & persetujuan deliverable Fase 1 (acuan Milestone 2 — 20%) | BAST Fase 1 | M4 | Not Started |
-| 2.1 | Setup environment server, database server, repository Git, konfigurasi dasar struktur front-end / back-end, dan konfigurasi CI/CD dasar (server mitra Kodeintekno) | Repositori back-end & front-end; environment dev & staging siap | M5 | Not Started |
+| 2.1 | Setup environment server, database server PostgreSQL, repository Git, konfigurasi dasar struktur front-end Next.js / back-end NestJS, dan konfigurasi CI/CD dasar (server mitra Kodeintekno) | Repositori back-end & front-end; environment dev & staging siap | M5 | Not Started |
 | 2.2 | Sistem registrasi, login, manajemen peran (Superadmin, Admin, Mentor, Taruna) & autentikasi 2FA via Email/OTP (wajib untuk Mentor & Taruna) | Modul auth & keamanan 2FA aktif | M5–M7 | Not Started |
 | 2.3 | Modul pembelajaran berbasis klasifikasi jenis kapal (Bulk Carrier, Tanker, Container, Passenger, dll.) — CRUD master data | Modul materi per klasifikasi kapal | M7–M9 | Not Started |
 | 2.4 | Fitur Mentor Live Lesson: penjadwalan oleh Mentor/Admin; integrasi link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API tergantung kesepakatan PKS); tampilan absensi dan akses masuk sesi live bagi taruna | Fitur Live Lesson terintegrasi | M9–M11 | Not Started |
@@ -824,12 +834,12 @@ Go-Live hanya dilakukan setelah:
 | Metode Live Lesson belum ditentukan | Arsitektur dan estimasi dapat berubah | Opsi: link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API) — tergantung kesepakatan spesifik PKS (WBS 1.2) | Tercatat di WBS 2.4 |
 | Provider video & pilihan paket infra belum diputuskan | Integrasi dan biaya belum dapat dipastikan | Opsi: AWS S3 / Vimeo / Cloudflare Stream sesuai anggaran PKS; Klien memilih paket Ekonomis/Standar/Premium sebelum Fase 4 | Status Confirmed — konfirmasi sebelum WBS 4.2 |
 | Kontrak (MOU) belum final | Risiko perubahan tanggung jawab dan kepemilikan | Finalisasi MOU sebelum pekerjaan yang bergantung pada persetujuan | WBS 0.1 In Progress (50%); klausul MOU In Progress |
-| Teknologi back-end belum ditetapkan | Setup dan desain teknis tertunda | Putuskan stack dan standar proyek sejak awal (WBS 1.2, 2.1) | Terbuka |
+| Teknologi back-end belum ditetapkan | Setup dan desain teknis tertunda | ✓ Diputuskan: NestJS (TypeScript) + PostgreSQL; front-end Next.js (React + TypeScript) — lihat header PRD dan §6.1; arsitektur final difinalkan WBS 1.2 | Diputuskan pada PRD v1.5 |
 | Kontrak API tidak sinkron | Integrasi front-end dan back-end berulang kali gagal | Dokumentasikan API dan lakukan review bersama (WBS 1.2, 2.5) | Terbuka |
 | PIC teknis belum lengkap (kolom PIC masih kosong) | Pekerjaan berpotensi tidak tertangani | Tetapkan PIC dan reviewer setiap deliverable bila sudah tersedia (lihat §9.3) | Dibiarkan kosong untuk sementara |
 | Perbedaan nama PM antar sheet (Kak Irwan vs Kak Yudi / Kak Adi & Yudi) | Target koordinasi berisiko salah | Dicatat apa adanya untuk sementara; diklarifikasi kemudian bila diperlukan | Dibiarkan untuk sementara |
 | Respons BAST/UAT Klien terlambat | Jadwal fase berikutnya bergeser (maks. 5 hari kerja per verifikasi; UAT bergantung respons Klien) | Jadwalkan tanggal BAST/UAT di awal tiap fase | Disorot di WBS 1.4, 2.5, 4.3, 5.2 |
-| Backup tidak pernah diuji pemulihannya | Risiko kehilangan data | Jadwalkan uji restore dan dokumentasikan hasil (SOP backup Fase 5) | Terbuka |
+| Backup tidak pernah diuji pemulihannya | Risiko kehilangan data | Uji restore berkala wajib: 1x/kuartal sebelum Go-Live, 1x/semester setelahnya; hasil didokumentasikan sebagai syarat penerimaan SOP backup (lihat §5.4) | Diatur pada PRD v1.5 |
 
 ---
 
@@ -837,20 +847,20 @@ Go-Live hanya dilakukan setelah:
 
 Sebelum PRD ini ditetapkan sebagai baseline final, tim perlu mengonfirmasi (di luar hal yang sudah dikunci workbook — ditandai ✓):
 
-1. Teknologi back-end, front-end, dan database apa yang akan digunakan? (kerangka back-end & front-end disiapkan pada WBS 2.1; CI/CD dasar disiapkan bersamaan)
-2. ✓ Metode login: registrasi + login; 2FA via Email/OTP untuk Mentor & Taruna. Tersisa: mekanisme pemulihan akun dan kebijakan kedaluwarsa sesi.
+1. ✓ Stack dikunci: back-end NestJS (TypeScript), front-end Next.js (React + TypeScript), database PostgreSQL — lihat header PRD dan §6.1; arsitektur final difinalkan pada WBS 1.2.
+2. ✓ Metode login: registrasi + login; 2FA via Email/OTP untuk Mentor & Taruna; parameter sesi, password, dan OTP ditetapkan pada FR-AUTH-05, FR-AUTH-06, dan FR-AUTH-08. Tersisa: mekanisme pemulihan akun selain reset via email.
 3. Opsi Live Lesson: link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API) — tergantung kesepakatan spesifik PKS.
-4. Apa aturan detail assessment lima level, termasuk passing grade, percobaan, dan remedial? (✓ format: CBT pilihan ganda + esai + timer; auto-grading + penilaian manual; bank soal berbasis level dan kategori kapal)
-5. Siapa yang dapat membuat dan mengubah materi, soal, jadwal, rating, serta sertifikat? (✓ rating oleh taruna terhadap kelas/mentor; penjadwalan Live Lesson oleh Mentor/Admin; esai diperiksa mentor/pemeriksa berwenang; business logic difinalkan pada Fase 1)
-6. Apakah sertifikat memerlukan nomor unik, verifikasi publik, atau format PDF tertentu? (✓ penerbitan mengikuti logika unlock berdasarkan kelulusan level)
+4. Aturan assessment: default pada FR-ASSESS-09 (passing grade 70, maks 3 percobaan, jeda 24 jam, remedial pengulangan level) — klien mengonfirmasi/mengubah pada Fase 1. (✓ format: CBT pilihan ganda + esai + timer; auto-grading + penilaian manual; bank soal berbasis level dan kategori kapal)
+5. Siapa yang dapat membuat dan mengubah materi, soal, jadwal, rating, serta sertifikat? (✓ rating oleh taruna terhadap kelas/mentor; penjadwalan Live Lesson oleh Mentor/Admin; esai diperiksa mentor/pemeriksa berwenang; business logic difinalkan pada Fase 1; "Support" = Admin yang menangani tiket)
+6. Sertifikat: PDF dengan nomor unik (lihat FR-REVIEW-05). Tersisa: apakah perlu halaman verifikasi publik/QR — diputuskan sebelum Fase 3.
 7. Penyedia hosting video apa yang digunakan? Opsi: AWS S3 / Vimeo / Cloudflare Stream sesuai anggaran PKS; pemutar secured stream/HLS dengan proteksi tautan. (✓ via mitra hosting pihak ketiga; Klien diinformasikan; pilihan paket sebelum Fase 4)
-8. Berapa jumlah pengguna bersamaan dan target performa yang diperlukan? (cakupan pengujian: black-box + stress testing ringan)
-9. Apa kebijakan retensi data, audit log, backup, dan pemulihan? (✓ backup minimal 1x/bulan oleh Kodeintekno, SOP dapat diaudit)
+8. Kapasitas awal: 500 pengguna terdaftar, 100 bersamaan; p95 < 500 ms (lihat §5.2). Angka final ditetapkan Fase 1 dan menjadi kriteria UAT.
+9. ✓ Retensi: audit log & hasil assessment minimal 5 tahun, soft delete, hapus permanen hanya oleh Superadmin; backup 1x/bulan + uji restore berkala; kepatuhan UU PDP (lihat §5.1, §5.4, §7).
 10. Email untuk kode 2FA via Email/OTP sudah pasti dibutuhkan (didukung komponen Email Service pada §6.1). Yang masih terbuka: apakah diperlukan notifikasi tambahan (WhatsApp atau notifikasi lain) di luar OTP?
 11. Bagaimana definisi bug kritis, revisi minor, dan SLA maintenance satu tahun? (✓ maintenance 1 tahun pasca Go-Live)
 12. ✓ Baseline timeline: 19 Oktober 2026–19 Februari 2027 mengikat; label M1–M21 adalah urutan perencanaan WBS yang dipetakan ke rentang tersebut.
 13. PIC deliverable mengikuti §9.1; sel yang masih kosong dibiarkan untuk sementara dan dilengkapi kemudian.
-14. Apakah terdapat kebutuhan aksesibilitas, bahasa tambahan, atau integrasi eksternal lain?
+14. ✓ Bahasa default Bahasa Indonesia + aksesibilitas minimum (lihat §2); multi-bahasa/aksesibilitas lanjutan = Change Request.
 15. Apa nama domain utama production yang dipakai pada WBS 5.3?
 
 Jawaban terhadap pertanyaan tersebut menjadi bagian dari spesifikasi teknis dan keputusan produk yang disetujui.
@@ -911,4 +921,4 @@ PRD ini digunakan bersama dokumen:
 | DLV-11 | MOU final (ownership, IP, hak cipta, domain, source code, brand, force majeure, otoritas perubahan) | Pra-proyek | Pak Mulya & Legal | In Review |
 | DLV-12 | Go-Live (migrasi staging → production VPS pada server mitra Kodeintekno, domain utama — lihat §13 butir 15, SSL) + training (Superadmin, Admin, Mentor, Taruna) + penyerahan hak akses utama (Superadmin, hosting, domain) dan dokumen/source code | Fase 5 | Pak Mulya & PMO | Pending |
 
-**Catatan status:** PRD v1.4 merapikan konsistensi seluruh dokumen: nama resmi yang berlaku adalah "Sekolah Pelayaran Indonesia" (penyebutan "Sekolah Pelaut Indonesia" pada dokumen detail merujuk pada klien yang sama); keempat peran (Superadmin, Admin, Mentor, Taruna) beserta keempat dashboard tercantum lengkap dan konsisten; istilah memakai "peran" (RBAC hanya disinggung sebagai singkatan baku bila perlu); hierarki video ditegaskan sebagai Kategori (jenis kapal) → Kursus → Bab → Materi Video; Email Service tercantum sebagai komponen §6.1; produksi ditegaskan sebagai VPS pada server mitra Kodeintekno. Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx` dengan keputusan: tanggal selesai mengikat 19 Februari 2027, dan sel PIC yang kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian. Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
+**Catatan status:** PRD v1.5 mengunci stack (NestJS + Next.js + PostgreSQL) dan melengkapi kebijakan operasional hasil audit celah: sesi/token, password, OTP, upload, reschedule, absensi, remedial default, UU PDP, retensi 5 tahun, uji restore berkala, Email Service, monitoring, migrasi berversion, zona WIB, definisi Support, bahasa Indonesia, dan sertifikat PDF bernomor unik. Nama resmi "Sekolah Pelayaran Indonesia". Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx`: tanggal selesai mengikat 19 Februari 2027, sel PIC kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian (terutama sebelum/dalam Fase 1). Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
