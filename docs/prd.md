@@ -1,7 +1,7 @@
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
 ## Web Apps — Sekolah Pelayaran Indonesia
 
-**Versi:** 1.6 — Draft (front-end React saja; storage video dikunci Bunny Stream; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
+**Versi:** 1.7 — Draft (rapian audit v1.6 + alur upload video & koreksi esai; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
 **Status:** Draft untuk review dan validasi
 **Perusahaan pengembang:** PT Kodeintekno Cipta Solusi
 **Stakeholder utama:** Pak Mulya / Pak Mulyana
@@ -12,7 +12,7 @@
 **Stack front-end:** React + TypeScript (SPA, dibangun dengan Vite)
 **Stack back-end:** NestJS (TypeScript)
 **Database:** PostgreSQL
-**Alasan pemilihan:** satu bahasa (TypeScript) untuk front-end dan back-end sehingga Rafi (Backend) dan Khenzo (Front-End) memakai kontrak tipe yang sama; React SPA ringan dan hosting statisnya murah; NestJS memberi struktur modular untuk 4 peran, RBAC, dan audit; PostgreSQL andal untuk relasi hierarki Kategori → Kursus → Bab → Materi, hasil assessment, dan kebutuhan audit/retensi; ekosistem managed hosting PostgreSQL memudahkan backup dan pemulihan pada VPS server mitra.
+**Alasan pemilihan:** satu bahasa (TypeScript) untuk front-end dan back-end sehingga Rafi (Backend) dan Khenzo (Front-End) memakai kontrak tipe yang sama; React SPA ringan dan hosting statisnya murah; NestJS memberi struktur modular untuk 4 peran, kontrol akses berbasis peran (RBAC), dan audit; PostgreSQL andal untuk relasi hierarki Kategori → Kursus → Bab → Materi, hasil assessment, dan kebutuhan audit/retensi; ekosistem managed hosting PostgreSQL memudahkan backup dan pemulihan pada VPS server mitra.
 **Lokasi pilot / fokus khusus:** Pembelajaran Siswa Maritim
 **Dasar dokumen:** Scope Confirmation No. PPA/MLY-SC/VIII/2026 dan Proposal Project Awal No. PPA/MLY-EL/VIII/2026, kode MLY-E01
 **Sumber acuan tim & jadwal:** Workbook `Maritim Team & Timeline.xlsx` — 4 sheet: `Executive Summary`, `Breaf & Team`, `Project Timeline` (WBS 0.1–5.4, Gantt M1–M21), `Deliverable & Scope Log` (DLV-01–DLV-12)
@@ -73,7 +73,7 @@ Target numerik untuk performa, ketersediaan, dan kapasitas pengguna perlu diteta
 
 # 2. Target Pengguna
 
-Peran yang didukung: Superadmin, Admin, Mentor, dan Taruna (sesuai `detail_fase_pekerjaan_SPI.md` Fase 1–2). Superadmin memegang hak akses tertinggi, termasuk pengelolaan akun dan penyerahan hak akses utama (Superadmin, hosting, domain) saat handover. "Support" bukan peran sistem tersendiri: yang dimaksud dengan label "Admin/Support" pada fitur ticketing adalah pengguna berperar Admin yang menangani tiket.
+Peran yang didukung: Superadmin, Admin, Mentor, dan Taruna (sesuai `detail_fase_pekerjaan_SPI.md` Fase 1–2). Superadmin memegang hak akses tertinggi, termasuk pengelolaan akun dan penyerahan hak akses utama (Superadmin, hosting, domain) saat handover. "Support" bukan peran sistem tersendiri: yang dimaksud dengan label "Admin/Support" pada fitur ticketing adalah pengguna berperan Admin yang menangani tiket.
 
 Bahasa antarmuka default adalah Bahasa Indonesia. Kebutuhan aksesibilitas minimum (kontras warna yang terbaca, navigasi keyboard, dan label yang ramah pembaca layar) diterapkan pada halaman utama; kebutuhan multi-bahasa atau aksesibilitas lanjutan di luar itu masuk Change Request.
 
@@ -320,6 +320,7 @@ Menampilkan:
 - Ringkasan kelas dan jadwal.
 - Informasi taruna yang terkait dengan kelas.
 - Ringkasan hasil assessment yang boleh diakses.
+- Antrian koreksi esai: daftar jawaban esai menunggu penilaian beserta form input nilai manual.
 - Aktivitas feedback dan pembelajaran.
 - Informasi operasional sesuai kewenangan.
 
@@ -347,16 +348,15 @@ Menampilkan seluruh ringkasan dashboard Admin, ditambah pengelolaan akun/hak aks
 
 **ID:** FR-VIDEO
 
-Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video sesuai `detail_fase_pekerjaan_SPI.md` Fase 3; kategori pada hierarki ini identik dengan kategori jenis kapal pada FR-LEARN. Penyimpanan dan pemutaran file video memakai Bunny Stream — transcoding otomatis, HLS adaptif, CDN global, player bawaan, dan token authentication; tarif berbasis GB tersimpan + GB terkirim sehingga paling murah untuk pola tonton ulang e-learning dengan volume proyek ini. Konfirmasi paket biaya final mengikuti pilihan paket infra sebelum Fase 4. Pemutar front-end memakai token authentication dengan proteksi tautan.
+Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video sesuai `detail_fase_pekerjaan_SPI.md` Fase 3; kategori pada hierarki ini identik dengan kategori jenis kapal pada FR-LEARN. Penyimpanan dan pemutaran file video memakai Bunny Stream — transcoding otomatis, HLS adaptif, CDN global, player bawaan, dan token authentication (token bertanda tangan dengan masa berlaku sebagai mekanisme proteksi tautan HLS); tarif berbasis GB tersimpan + GB terkirim sehingga paling murah untuk pola tonton ulang e-learning dengan volume proyek ini. Konfirmasi paket biaya final mengikuti pilihan paket infra sebelum Fase 4. Pemutar front-end memakai token authentication tersebut.
 
 ### Kebutuhan
 
-- FR-VIDEO-01: Sistem menyimpan metadata video (termasuk thumbnail) dan referensi ke penyedia hosting. Thumbnail dibatasi maksimal 2 MB dengan format JPG/PNG dan dimensi maksimal 1920×1080; berkas yang diunggah divalidasi server-side (tipe MIME dan ukuran) dan dipindai antivirus/malware sebelum disimpan.
+- FR-VIDEO-01: Sistem menyimpan metadata video (termasuk thumbnail) dan referensi video Bunny Stream. Alur unggah: klien menyerahkan berkas video mentah; tim/Admin mengunggah berkas ke Bunny Stream melalui dashboard dan mengisi metadata + thumbnail pada materi terkait. Thumbnail dibatasi maksimal 2 MB dengan format JPG/PNG dan dimensi maksimal 1920×1080; berkas yang diunggah divalidasi server-side (tipe MIME dan ukuran) dan dipindai antivirus/malware sebelum disimpan.
 - FR-VIDEO-02: Video dikaitkan dalam hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video.
 - FR-VIDEO-03: Taruna dapat membuka video yang berhak diaksesnya melalui pemutar dengan token authentication (HLS adaptif Bunny Stream).
 - FR-VIDEO-04: Sistem menangani video yang tidak tersedia atau gagal dimuat.
-- FR-VIDEO-05: Integrasi menggunakan penyedia pihak ketiga yang disetujui.
-- FR-VIDEO-06: Pengelolaan akses dan pembatasan konten mengikuti kemampuan penyedia layanan.
+- FR-VIDEO-05: Integrasi memakai Bunny Stream sebagai satu-satunya penyedia hosting dan streaming video (lihat §6.1 butir 4).
 
 ### Kriteria Penerimaan
 
@@ -597,7 +597,7 @@ Aturan penting:
 2. Taruna memilih kategori kapal, lalu kursus dan bab.
 3. Sistem menampilkan materi yang tersedia.
 4. Taruna membuka materi.
-5. Taruna mempelajari teks atau video (streaming HLS adaptif dari Bunny Stream).
+5. Taruna mempelajari teks atau video (streaming HLS adaptif dari Bunny Stream, diproteksi token authentication).
 6. Sistem mencatat progres jika fitur pelacakan materi telah diaktifkan.
 
 ## 8.3 Mengikuti Assessment
@@ -608,7 +608,7 @@ Aturan penting:
 4. Taruna mengirim jawaban pilihan ganda dan/atau esai.
 5. Back-end memvalidasi dan menyimpan jawaban.
 6. Taruna menyelesaikan ujian.
-7. Sistem menghitung nilai pilihan ganda secara otomatis; jawaban esai menunggu penilaian manual pemeriksa berwenang.
+7. Sistem menghitung nilai pilihan ganda secara otomatis; jawaban esai masuk antrian koreksi di dashboard Mentor dan menunggu penilaian manual pemeriksa berwenang.
 8. Hasil ditampilkan sesuai kebijakan evaluasi.
 9. Sistem memeriksa kelayakan level berikutnya serta unlock materi dan sertifikat.
 10. Taruna memberikan rating terhadap kelas/mentor yang diikuti.
@@ -618,7 +618,7 @@ Aturan penting:
 1. Mentor/Admin membuat jadwal Live Lesson.
 2. Sistem menyimpan tautan atau konfigurasi embedded video conference.
 3. Taruna melihat jadwal dan masuk ke sesi live; absensi tercatat.
-4. Mentor memeriksa progres dan hasil; penilaian esai mengikuti alur §8.3 langkah 7.
+4. Mentor memeriksa progres dan hasil; penilaian esai dikerjakan melalui antrian koreksi di dashboard Mentor (lihat §8.3 langkah 7).
 
 ## 8.5 Pengaduan
 
@@ -682,7 +682,7 @@ Perbedaan pencatatan nama PM antara sheet `Breaf & Team` (Kak Irwan) dan sheet `
 
 # 10. Roadmap Pengembangan
 
-Acuan jadwal adalah workbook `Maritim Team & Timeline.xlsx`: tanggal mulai dan selesai yang mengikat adalah 19 Oktober 2026–19 Februari 2027 (lihat §10.1). Label M1–M21 pada sheet `Project Timeline` adalah label urutan perencanaan WBS (kode 0.1–5.4) yang dipetakan ke dalam rentang tanggal tersebut; bila terjadi selisih hitungan minggu kalender, tanggal 19 Februari 2027 yang berlaku. Total 23 aktivitas WBS.
+Acuan jadwal adalah workbook `Maritim Team & Timeline.xlsx`: tanggal mulai dan selesai yang mengikat adalah 19 Oktober 2026–19 Februari 2027 (lihat §10.1). Label M1–M21 pada sheet `Project Timeline` adalah label urutan perencanaan WBS (kode 0.1–5.4) yang dipetakan ke dalam rentang tanggal tersebut; bila terjadi selisih hitungan minggu kalender, tanggal 19 Februari 2027 yang berlaku. Rincian WBS memuat 23 aktivitas (kode 0.1–5.4); angka "20 tugas" pada sheet `Executive Summary` adalah hitungan ringkasan versi lama dan tidak dipakai — yang berlaku adalah 23 aktivitas pada tabel §10.2.
 
 ## 10.1 Ringkasan Fase (sesuai `Executive Summary`)
 
@@ -715,7 +715,7 @@ Catatan pemetaan: penamaan fase pada sheet `Project Timeline` (Fase 1: UI/UX & S
 | 3.1 | Sistem pengujian berjenjang Assessment 5 Level (CBT: pilihan ganda, esai, timer) & pelacakan progres kompetensi taruna; auto-grading pilihan ganda, input nilai manual esai, logika unlock materi/sertifikat | Modul ujian Level 1–5 | M12–M14 | Not Started |
 | 3.2 | Integrasi bank soal & evaluasi berstandar maritim internasional (acuan STCW / Maritime Trainer; skema bank soal berbasis level dan kategori kapal; input soal oleh Klien) | Fitur kuis & evaluasi standar maritim | M13–M15 | Not Started |
 | 3.3 | Rating system (taruna memberi rating pada kelas/mentor), feedback mentor, sertifikat digital & dashboard Superadmin/Admin/Mentor/Taruna (rekap nilai & sertifikat kelulusan) | Dashboard lengkap | M14–M16 | Not Started |
-| 3.4 | Modul video pembelajaran terintegrasi pada platform: struktur Kategori (jenis kapal) → Kursus → Bab → Materi Video; form unggah metadata dan thumbnail (berkas video tersimpan di penyedia hosting) | Struktur modul video siap integrasi | M15–M16 | Not Started |
+| 3.4 | Modul video pembelajaran terintegrasi pada platform: struktur Kategori (jenis kapal) → Kursus → Bab → Materi Video; alur unggah (klien serahkan berkas mentah, tim/Admin unggah ke Bunny Stream via dashboard) + form metadata dan thumbnail | Struktur modul video siap integrasi | M15–M16 | Not Started |
 | 4.1 | Sistem pengaduan / ticketing pengguna: form pelaporan taruna; dashboard khusus Admin/Support untuk merespons dan melacak status (Open, In Progress, Resolved, Closed) — penambahan sesuai Scope Confirmation | Fitur ticketing / helpdesk aktif | M17–M18 | Not Started |
 | 4.2 | Integrasi Bunny Stream (HLS adaptif, CDN, player bawaan, token authentication) & konfigurasi server produksi; Klien diinformasikan mengenai mitra 3rd party | Integrasi hosting video & server selesai | M18–M19 | Not Started |
 | 4.3 | Review & verifikasi deliverable Fase 3 & Fase 4 (acuan Milestone 4 — 15%); code optimization (refactoring) dan API hardening sebelum verifikasi | BAST Fase 3–4 | M19 | Not Started |
@@ -784,7 +784,7 @@ Pengujian mencakup:
 - Validasi input.
 - Data kosong atau tidak ditemukan.
 - Konflik data dan permintaan berulang.
-- Batasan akses antar-peran.
+- Batasan akses antarperan.
 - Konsistensi format respons.
 
 ## 11.3 Integration Testing
@@ -921,4 +921,4 @@ PRD ini digunakan bersama dokumen:
 | DLV-11 | MOU final (ownership, IP, hak cipta, domain, source code, brand, force majeure, otoritas perubahan) | Pra-proyek | Pak Mulya & Legal | In Review |
 | DLV-12 | Go-Live (migrasi staging → production VPS pada server mitra Kodeintekno, domain utama — lihat §13 butir 15, SSL) + training (Superadmin, Admin, Mentor, Taruna) + penyerahan hak akses utama (Superadmin, hosting, domain) dan dokumen/source code | Fase 5 | Pak Mulya & PMO | Pending |
 
-**Catatan status:** PRD v1.6 mengunci front-end React + TypeScript (SPA, Vite) dan storage/streaming video Bunny Stream (transcoding otomatis, HLS adaptif, CDN, player bawaan, token authentication; tarif berbasis GB sehingga paling murah untuk pola tonton ulang), menggantikan seluruh opsi ngambang sebelumnya. Nama resmi "Sekolah Pelayaran Indonesia". Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx`: tanggal selesai mengikat 19 Februari 2027, sel PIC kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian (terutama sebelum/dalam Fase 1). Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
+**Catatan status:** PRD v1.7 merapikan hasil audit v1.6 (typo "berperan", klarifikasi 23 vs 20 aktivitas WBS, kepanjangan RBAC, hubungan token authentication–HLS) dan mengunci dua alur sesuai keputusan: berkas video diunggah tim/Admin via dashboard (klien menyerahkan berkas mentah); koreksi esai dikerjakan melalui antrian koreksi di dashboard Mentor. Nama resmi "Sekolah Pelayaran Indonesia". Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx`: tanggal selesai mengikat 19 Februari 2027, sel PIC kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian (terutama sebelum/dalam Fase 1). Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
