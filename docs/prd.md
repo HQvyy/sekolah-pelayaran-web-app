@@ -1,7 +1,7 @@
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
 ## Web Apps — Sekolah Pelayaran Indonesia
 
-**Versi:** 1.5 — Draft (kunci stack + kebijakan operasional; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
+**Versi:** 1.6 — Draft (front-end React saja; storage video dikunci Bunny Stream; tanggal selesai mengikat 19 Februari 2027; sel PIC kosong dibiarkan untuk sementara)
 **Status:** Draft untuk review dan validasi
 **Perusahaan pengembang:** PT Kodeintekno Cipta Solusi
 **Stakeholder utama:** Pak Mulya / Pak Mulyana
@@ -9,10 +9,10 @@
 **Target penyelesaian:** 19 Februari 2027
 **Platform:** Responsive Web Application
 **Arsitektur komunikasi:** REST API
-**Stack front-end:** Next.js (React + TypeScript)
+**Stack front-end:** React + TypeScript (SPA, dibangun dengan Vite)
 **Stack back-end:** NestJS (TypeScript)
 **Database:** PostgreSQL
-**Alasan pemilihan:** satu bahasa (TypeScript) untuk front-end dan back-end sehingga Rafi (Backend) dan Khenzo (Front-End) memakai kontrak tipe yang sama; NestJS memberi struktur modular untuk 4 peran, RBAC, dan audit; PostgreSQL andal untuk relasi hierarki Kategori → Kursus → Bab → Materi, hasil assessment, dan kebutuhan audit/retensi; ekosistem managed hosting PostgreSQL memudahkan backup dan pemulihan pada VPS server mitra.
+**Alasan pemilihan:** satu bahasa (TypeScript) untuk front-end dan back-end sehingga Rafi (Backend) dan Khenzo (Front-End) memakai kontrak tipe yang sama; React SPA ringan dan hosting statisnya murah; NestJS memberi struktur modular untuk 4 peran, RBAC, dan audit; PostgreSQL andal untuk relasi hierarki Kategori → Kursus → Bab → Materi, hasil assessment, dan kebutuhan audit/retensi; ekosistem managed hosting PostgreSQL memudahkan backup dan pemulihan pada VPS server mitra.
 **Lokasi pilot / fokus khusus:** Pembelajaran Siswa Maritim
 **Dasar dokumen:** Scope Confirmation No. PPA/MLY-SC/VIII/2026 dan Proposal Project Awal No. PPA/MLY-EL/VIII/2026, kode MLY-E01
 **Sumber acuan tim & jadwal:** Workbook `Maritim Team & Timeline.xlsx` — 4 sheet: `Executive Summary`, `Breaf & Team`, `Project Timeline` (WBS 0.1–5.4, Gantt M1–M21), `Deliverable & Scope Log` (DLV-01–DLV-12)
@@ -137,7 +137,7 @@ Detail pembagian kewenangan Superadmin, Admin, Mentor, dan Taruna dikonfirmasi m
 9. Rating taruna terhadap kelas/mentor dan feedback.
 10. Sertifikat digital.
 11. Dashboard Superadmin, Admin, Mentor, dan Taruna.
-12. Video pembelajaran (hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video; hosting pihak ketiga dengan secured stream/HLS).
+12. Video pembelajaran (hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video; hosting Bunny Stream dengan token authentication).
 13. Sistem pengaduan atau ticketing (dashboard khusus Admin/Support).
 14. REST API antara front-end dan back-end (dokumentasi Swagger/Postman Collection).
 15. Environment development/staging/produksi, repository Git, dan konfigurasi CI/CD dasar.
@@ -347,13 +347,13 @@ Menampilkan seluruh ringkasan dashboard Admin, ditambah pengelolaan akun/hak aks
 
 **ID:** FR-VIDEO
 
-Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video sesuai `detail_fase_pekerjaan_SPI.md` Fase 3; kategori pada hierarki ini identik dengan kategori jenis kapal pada FR-LEARN. Penyimpanan dan pemutaran file video menggunakan penyedia hosting pihak ketiga (opsi: AWS S3, Vimeo, atau Cloudflare Stream sesuai anggaran PKS); pemutar front-end menggunakan secured stream/HLS dengan proteksi tautan.
+Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video sesuai `detail_fase_pekerjaan_SPI.md` Fase 3; kategori pada hierarki ini identik dengan kategori jenis kapal pada FR-LEARN. Penyimpanan dan pemutaran file video memakai Bunny Stream — transcoding otomatis, HLS adaptif, CDN global, player bawaan, dan token authentication; tarif berbasis GB tersimpan + GB terkirim sehingga paling murah untuk pola tonton ulang e-learning dengan volume proyek ini. Konfirmasi paket biaya final mengikuti pilihan paket infra sebelum Fase 4. Pemutar front-end memakai token authentication dengan proteksi tautan.
 
 ### Kebutuhan
 
 - FR-VIDEO-01: Sistem menyimpan metadata video (termasuk thumbnail) dan referensi ke penyedia hosting. Thumbnail dibatasi maksimal 2 MB dengan format JPG/PNG dan dimensi maksimal 1920×1080; berkas yang diunggah divalidasi server-side (tipe MIME dan ukuran) dan dipindai antivirus/malware sebelum disimpan.
 - FR-VIDEO-02: Video dikaitkan dalam hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video.
-- FR-VIDEO-03: Taruna dapat membuka video yang berhak diaksesnya melalui pemutar dengan proteksi tautan (secured stream/HLS).
+- FR-VIDEO-03: Taruna dapat membuka video yang berhak diaksesnya melalui pemutar dengan token authentication (HLS adaptif Bunny Stream).
 - FR-VIDEO-04: Sistem menangani video yang tidak tersedia atau gagal dimuat.
 - FR-VIDEO-05: Integrasi menggunakan penyedia pihak ketiga yang disetujui.
 - FR-VIDEO-06: Pengelolaan akses dan pembatasan konten mengikuti kemampuan penyedia layanan.
@@ -363,7 +363,7 @@ Struktur kurikulum video mengikuti hierarki Kategori (jenis kapal) → Kursus �
 - Video yang valid dapat ditampilkan pada halaman materi.
 - Video yang tidak tersedia menghasilkan kondisi error yang jelas.
 - Tautan dan kredensial rahasia penyedia tidak terekspos melalui respons API.
-- Video tidak dialirkan langsung dari server aplikasi (streaming berasal dari penyedia pihak ketiga).
+- Video tidak dialirkan langsung dari server aplikasi (streaming berasal dari Bunny Stream).
 
 ## 4.8 Sistem Pengaduan atau Ticketing
 
@@ -416,7 +416,7 @@ Rekomendasi awal untuk divalidasi:
 - Endpoint laporan atau proses berat boleh memiliki target terpisah.
 - Query database perlu dioptimalkan untuk menghindari pengambilan data berlebihan.
 - Daftar data yang berpotensi besar harus mendukung pagination.
-- Pemutaran video tidak boleh membebani server aplikasi dengan mengalirkan file secara langsung jika penyedia video pihak ketiga digunakan.
+- Pemutaran video tidak boleh membebani server aplikasi dengan mengalirkan file secara langsung (streaming berasal dari Bunny Stream).
 
 Angka tersebut merupakan usulan awal, bukan SLA yang sudah disetujui. Angka final (concurrent users, p95, uptime) ditetapkan pada Fase 1 dan menjadi kriteria UAT.
 
@@ -448,10 +448,10 @@ Definisi bug, revisi minor, waktu respons dukungan, dan pengecualian layanan har
 
 ## 6.1 Komponen Utama
 
-1. **Front-End Web App:** Next.js (React + TypeScript) — antarmuka pengguna yang dikembangkan oleh Khenzo.
+1. **Front-End Web App:** React + TypeScript (SPA, Vite) — antarmuka pengguna yang dikembangkan oleh Khenzo.
 2. **Back-End REST API:** NestJS (TypeScript) — logika bisnis, autentikasi, validasi, dan akses data yang dikembangkan oleh Rafi.
 3. **Database:** PostgreSQL — penyimpanan pengguna, peran, materi, kursus/bab/video, kelas, assessment, hasil, progres, tiket, dan sertifikat.
-4. **Video Hosting Provider:** penyedia penyimpanan dan pemutaran video pihak ketiga (opsi: AWS S3, Vimeo, atau Cloudflare Stream sesuai anggaran PKS), diakses via secured stream/HLS.
+4. **Video Hosting Provider:** Bunny Stream — transcoding otomatis, HLS adaptif, CDN global, player bawaan, token authentication; tarif berbasis GB tersimpan + GB terkirim.
 5. **External Live Lesson Service:** penjadwalan oleh Mentor/Admin; integrasi link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API, tergantung kesepakatan spesifik PKS).
 6. **Email Service:** layanan pengiriman email untuk kode 2FA via Email/OTP kepada Mentor dan Taruna.
 7. **Production Infrastructure:** VPS production pada server mitra Kodeintekno, repository Git dengan konfigurasi CI/CD dasar, database server, domain, SSL, logging, dan automated backup.
@@ -597,7 +597,7 @@ Aturan penting:
 2. Taruna memilih kategori kapal, lalu kursus dan bab.
 3. Sistem menampilkan materi yang tersedia.
 4. Taruna membuka materi.
-5. Taruna mempelajari teks atau video (streaming HLS dari penyedia pihak ketiga).
+5. Taruna mempelajari teks atau video (streaming HLS adaptif dari Bunny Stream).
 6. Sistem mencatat progres jika fitur pelacakan materi telah diaktifkan.
 
 ## 8.3 Mengikuti Assessment
@@ -704,10 +704,10 @@ Catatan pemetaan: penamaan fase pada sheet `Project Timeline` (Fase 1: UI/UX & S
 | 0.2 | Pencairan Milestone 1 — uang muka / DP | Bukti bayar DP & invoice lunas | M1 | Not Started |
 | 0.3 | Kick-off meeting resmi (PMO Kodeintekno, tim internal, & Pak Mulya) | Berita acara kick-off & jalur komunikasi | M1 | Not Started |
 | 1.1 | Requirements gathering & diskusi spesifikasi kurikulum / modul kadet taruna dan business logic (kurikulum kapal, spesifikasi 5 level ujian, alur kelas) — materi disiapkan Klien | Dokumen kebutuhan fungsional & kurikulum | M1–M2 | Not Started |
-| 1.2 | Perancangan arsitektur sistem (REST API NestJS + PostgreSQL, front-end Next.js) & skema database, termasuk spesifikasi jaminan keamanan; keluaran meliputi ERD, flowchart, user journey (Superadmin, Admin, Mentor, Taruna), dan outline dokumentasi API | Dokumen spesifikasi teknis & REST API | M2–M3 | Not Started |
+| 1.2 | Perancangan arsitektur sistem (REST API NestJS + PostgreSQL, front-end React) & skema database, termasuk spesifikasi jaminan keamanan; keluaran meliputi ERD, flowchart, user journey (Superadmin, Admin, Mentor, Taruna), dan outline dokumentasi API | Dokumen spesifikasi teknis & REST API | M2–M3 | Not Started |
 | 1.3 | Wireframe (low fidelity: dashboard, kelas, modul video, ujian) & prototype desain UI/UX interaktif high fidelity (Superadmin, Admin, Mentor, Taruna; Figma/Adobe XD) menyesuaikan identitas Sekolah Pelayaran Indonesia, responsive desktop & mobile browser; design review & approval tertulis oleh klien | Prototype desain UI/UX | M2–M4 | Not Started |
 | 1.4 | Review, verifikasi & persetujuan deliverable Fase 1 (acuan Milestone 2 — 20%) | BAST Fase 1 | M4 | Not Started |
-| 2.1 | Setup environment server, database server PostgreSQL, repository Git, konfigurasi dasar struktur front-end Next.js / back-end NestJS, dan konfigurasi CI/CD dasar (server mitra Kodeintekno) | Repositori back-end & front-end; environment dev & staging siap | M5 | Not Started |
+| 2.1 | Setup environment server, database server PostgreSQL, repository Git, konfigurasi dasar struktur front-end React / back-end NestJS, dan konfigurasi CI/CD dasar (server mitra Kodeintekno) | Repositori back-end & front-end; environment dev & staging siap | M5 | Not Started |
 | 2.2 | Sistem registrasi, login, manajemen peran (Superadmin, Admin, Mentor, Taruna) & autentikasi 2FA via Email/OTP (wajib untuk Mentor & Taruna) | Modul auth & keamanan 2FA aktif | M5–M7 | Not Started |
 | 2.3 | Modul pembelajaran berbasis klasifikasi jenis kapal (Bulk Carrier, Tanker, Container, Passenger, dll.) — CRUD master data | Modul materi per klasifikasi kapal | M7–M9 | Not Started |
 | 2.4 | Fitur Mentor Live Lesson: penjadwalan oleh Mentor/Admin; integrasi link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API tergantung kesepakatan PKS); tampilan absensi dan akses masuk sesi live bagi taruna | Fitur Live Lesson terintegrasi | M9–M11 | Not Started |
@@ -717,7 +717,7 @@ Catatan pemetaan: penamaan fase pada sheet `Project Timeline` (Fase 1: UI/UX & S
 | 3.3 | Rating system (taruna memberi rating pada kelas/mentor), feedback mentor, sertifikat digital & dashboard Superadmin/Admin/Mentor/Taruna (rekap nilai & sertifikat kelulusan) | Dashboard lengkap | M14–M16 | Not Started |
 | 3.4 | Modul video pembelajaran terintegrasi pada platform: struktur Kategori (jenis kapal) → Kursus → Bab → Materi Video; form unggah metadata dan thumbnail (berkas video tersimpan di penyedia hosting) | Struktur modul video siap integrasi | M15–M16 | Not Started |
 | 4.1 | Sistem pengaduan / ticketing pengguna: form pelaporan taruna; dashboard khusus Admin/Support untuk merespons dan melacak status (Open, In Progress, Resolved, Closed) — penambahan sesuai Scope Confirmation | Fitur ticketing / helpdesk aktif | M17–M18 | Not Started |
-| 4.2 | Integrasi layanan pihak ketiga (hosting video: AWS S3 / Vimeo / Cloudflare Stream sesuai anggaran PKS; pemutar front-end secured stream/HLS dengan proteksi tautan) & konfigurasi server produksi; Klien diinformasikan mengenai mitra 3rd party | Integrasi hosting video & server selesai | M18–M19 | Not Started |
+| 4.2 | Integrasi Bunny Stream (HLS adaptif, CDN, player bawaan, token authentication) & konfigurasi server produksi; Klien diinformasikan mengenai mitra 3rd party | Integrasi hosting video & server selesai | M18–M19 | Not Started |
 | 4.3 | Review & verifikasi deliverable Fase 3 & Fase 4 (acuan Milestone 4 — 15%); code optimization (refactoring) dan API hardening sebelum verifikasi | BAST Fase 3–4 | M19 | Not Started |
 | 5.1 | End-to-end QA testing (black-box testing, stress testing ringan, pengecekan responsivitas Mobile Browser/Tablet/Desktop), bug fixing & security hardening aplikasi & database sesuai standar keamanan lampiran MOU | Laporan QA & jaminan keamanan sistem | M20 | Not Started |
 | 5.2 | UAT bersama Pak Mulya (Superadmin/Admin Klien, perwakilan Mentor & Taruna) & perbaikan minor — bug fixing hasil UAT, pencatatan minor revisions (ketepatan waktu bergantung respons UAT Klien) | Dokumen sign-off UAT | M20–M21 | Not Started |
@@ -832,9 +832,9 @@ Go-Live hanya dilakukan setelah:
 |---|---|---|---|
 | Materi dan bank soal terlambat diberikan (tanggung jawab Klien) | Pengujian dan pengembangan assessment tertunda (WBS 1.1, 3.2) | Tetapkan format serta tanggal penyerahan konten | Disorot di WBS 1.1 & 3.2 |
 | Metode Live Lesson belum ditentukan | Arsitektur dan estimasi dapat berubah | Opsi: link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API) — tergantung kesepakatan spesifik PKS (WBS 1.2) | Tercatat di WBS 2.4 |
-| Provider video & pilihan paket infra belum diputuskan | Integrasi dan biaya belum dapat dipastikan | Opsi: AWS S3 / Vimeo / Cloudflare Stream sesuai anggaran PKS; Klien memilih paket Ekonomis/Standar/Premium sebelum Fase 4 | Status Confirmed — konfirmasi sebelum WBS 4.2 |
+| Provider video & pilihan paket infra belum diputuskan | Integrasi dan biaya belum dapat dipastikan | ✓ Dikunci: Bunny Stream (HLS adaptif, CDN, player bawaan, token authentication); Klien mengonfirmasi paket biaya final sebelum Fase 4 | Diputuskan pada PRD v1.6 — konfirmasi biaya sebelum WBS 4.2 |
 | Kontrak (MOU) belum final | Risiko perubahan tanggung jawab dan kepemilikan | Finalisasi MOU sebelum pekerjaan yang bergantung pada persetujuan | WBS 0.1 In Progress (50%); klausul MOU In Progress |
-| Teknologi back-end belum ditetapkan | Setup dan desain teknis tertunda | ✓ Diputuskan: NestJS (TypeScript) + PostgreSQL; front-end Next.js (React + TypeScript) — lihat header PRD dan §6.1; arsitektur final difinalkan WBS 1.2 | Diputuskan pada PRD v1.5 |
+| Teknologi back-end belum ditetapkan | Setup dan desain teknis tertunda | ✓ Diputuskan: NestJS (TypeScript) + PostgreSQL; front-end React + TypeScript (SPA, Vite) — lihat header PRD dan §6.1; arsitektur final difinalkan WBS 1.2 | Diputuskan pada PRD v1.5 |
 | Kontrak API tidak sinkron | Integrasi front-end dan back-end berulang kali gagal | Dokumentasikan API dan lakukan review bersama (WBS 1.2, 2.5) | Terbuka |
 | PIC teknis belum lengkap (kolom PIC masih kosong) | Pekerjaan berpotensi tidak tertangani | Tetapkan PIC dan reviewer setiap deliverable bila sudah tersedia (lihat §9.3) | Dibiarkan kosong untuk sementara |
 | Perbedaan nama PM antar sheet (Kak Irwan vs Kak Yudi / Kak Adi & Yudi) | Target koordinasi berisiko salah | Dicatat apa adanya untuk sementara; diklarifikasi kemudian bila diperlukan | Dibiarkan untuk sementara |
@@ -847,13 +847,13 @@ Go-Live hanya dilakukan setelah:
 
 Sebelum PRD ini ditetapkan sebagai baseline final, tim perlu mengonfirmasi (di luar hal yang sudah dikunci workbook — ditandai ✓):
 
-1. ✓ Stack dikunci: back-end NestJS (TypeScript), front-end Next.js (React + TypeScript), database PostgreSQL — lihat header PRD dan §6.1; arsitektur final difinalkan pada WBS 1.2.
+1. ✓ Stack dikunci: back-end NestJS (TypeScript), front-end React + TypeScript (SPA, Vite), database PostgreSQL — lihat header PRD dan §6.1; arsitektur final difinalkan pada WBS 1.2.
 2. ✓ Metode login: registrasi + login; 2FA via Email/OTP untuk Mentor & Taruna; parameter sesi, password, dan OTP ditetapkan pada FR-AUTH-05, FR-AUTH-06, dan FR-AUTH-08. Tersisa: mekanisme pemulihan akun selain reset via email.
 3. Opsi Live Lesson: link sharing atau embedded video conference (WebRTC/Zoom/Google Meet API) — tergantung kesepakatan spesifik PKS.
 4. Aturan assessment: default pada FR-ASSESS-09 (passing grade 70, maks 3 percobaan, jeda 24 jam, remedial pengulangan level) — klien mengonfirmasi/mengubah pada Fase 1. (✓ format: CBT pilihan ganda + esai + timer; auto-grading + penilaian manual; bank soal berbasis level dan kategori kapal)
 5. Siapa yang dapat membuat dan mengubah materi, soal, jadwal, rating, serta sertifikat? (✓ rating oleh taruna terhadap kelas/mentor; penjadwalan Live Lesson oleh Mentor/Admin; esai diperiksa mentor/pemeriksa berwenang; business logic difinalkan pada Fase 1; "Support" = Admin yang menangani tiket)
 6. Sertifikat: PDF dengan nomor unik (lihat FR-REVIEW-05). Tersisa: apakah perlu halaman verifikasi publik/QR — diputuskan sebelum Fase 3.
-7. Penyedia hosting video apa yang digunakan? Opsi: AWS S3 / Vimeo / Cloudflare Stream sesuai anggaran PKS; pemutar secured stream/HLS dengan proteksi tautan. (✓ via mitra hosting pihak ketiga; Klien diinformasikan; pilihan paket sebelum Fase 4)
+7. ✓ Penyedia hosting video dikunci: Bunny Stream (transcoding otomatis, HLS adaptif, CDN global, player bawaan, token authentication); konfirmasi paket biaya final sebelum Fase 4.
 8. Kapasitas awal: 500 pengguna terdaftar, 100 bersamaan; p95 < 500 ms (lihat §5.2). Angka final ditetapkan Fase 1 dan menjadi kriteria UAT.
 9. ✓ Retensi: audit log & hasil assessment minimal 5 tahun, soft delete, hapus permanen hanya oleh Superadmin; backup 1x/bulan + uji restore berkala; kepatuhan UU PDP (lihat §5.1, §5.4, §7).
 10. Email untuk kode 2FA via Email/OTP sudah pasti dibutuhkan (didukung komponen Email Service pada §6.1). Yang masih terbuka: apakah diperlukan notifikasi tambahan (WhatsApp atau notifikasi lain) di luar OTP?
@@ -893,7 +893,7 @@ PRD ini digunakan bersama dokumen:
 - Dokumen Spesifikasi Teknis / PRD awal, ERD, flowchart, user journey, dan outline dokumentasi API (keluaran Fase 1).
 - Scope Confirmation No. PPA/MLY-SC/VIII/2026.
 - Proposal Project Awal No. PPA/MLY-EL/VIII/2026.
-- MOU atau kontrak kerja resmi / PKS (memuat klausul ownership, IP, hak cipta, domain, source code, brand, force majeure, otoritas perubahan, mitra 3rd party, jaminan keamanan aplikasi & database; kesepakatan spesifik PKS menjadi acuan opsi Live Lesson dan hosting video).
+- MOU atau kontrak kerja resmi / PKS (memuat klausul ownership, IP, hak cipta, domain, source code, brand, force majeure, otoritas perubahan, mitra 3rd party termasuk Bunny Stream, jaminan keamanan aplikasi & database; kesepakatan spesifik PKS menjadi acuan opsi Live Lesson).
 - UI/UX prototype (Figma/Adobe XD — low fidelity wireframe dan high fidelity mockup sesuai identitas Sekolah Pelayaran Indonesia, disetujui tertulis oleh klien).
 - Technical Specification (arsitektur REST API, skema database, spesifikasi keamanan).
 - Database Schema.
@@ -911,14 +911,14 @@ PRD ini digunakan bersama dokumen:
 | DLV-01 | Modul klasifikasi kapal (Bulk Carrier, Tanker, Container, Passenger, dll.; CRUD master data) | Fase 2 | Pak Mulya & PMO | Pending |
 | DLV-02 | Mentor Live Lesson (penjadwalan Mentor/Admin; link sharing / embedded video conference; absensi + akses sesi live) | Fase 2 | Pak Mulya & PMO | Pending |
 | DLV-03 | Assessment 5 Level CBT (pilihan ganda + esai + timer; auto-grading + penilaian manual; bank soal berbasis level & kategori kapal) + standar STCW + rating taruna ke kelas/mentor + sertifikat (logika unlock) + dashboard Superadmin/Admin/Mentor/Taruna | Fase 3 | Pak Mulya & PMO | Pending |
-| DLV-04 | Modul video pembelajaran (hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video; metadata + thumbnail; berkas video di penyedia hosting; secured stream/HLS) | Fase 3 & 4 | Pak Mulya & PMO | Pending |
+| DLV-04 | Modul video pembelajaran (hierarki Kategori (jenis kapal) → Kursus → Bab → Materi Video; metadata + thumbnail; Bunny Stream HLS adaptif + token authentication) | Fase 3 & 4 | Pak Mulya & PMO | Pending |
 | DLV-05 | Sistem ticketing / helpdesk (form taruna + dashboard Admin/Support: Open, In Progress, Resolved, Closed) | Fase 4 | Pak Mulya & PMO | Pending |
 | DLV-06 | 2FA via Email/OTP (mentor & taruna) + komunikasi REST API (outline Fase 1; Swagger/Postman Collection Fase 4) | Fase 2 | System Architect | Pending |
 | DLV-07 | Dokumen spesifikasi teknis (arsitektur REST API + keamanan) | Fase 1 & 2 | System Architect | Pending |
 | DLV-08 | Maintenance 1 tahun pasca Go-Live | Pasca Go-Live | PMO Kodeintekno | Pending |
 | DLV-09 | SOP backup bulanan (dapat diaudit) | Fase 5 | DevOps Engineer | Pending |
-| DLV-10 | Jaminan keamanan aplikasi & DB + daftar mitra server/hosting video | Pra-proyek / MOU | PMO & Legal | In Review |
+| DLV-10 | Jaminan keamanan aplikasi & DB + daftar mitra server/hosting video (termasuk Bunny Stream) | Pra-proyek / MOU | PMO & Legal | In Review |
 | DLV-11 | MOU final (ownership, IP, hak cipta, domain, source code, brand, force majeure, otoritas perubahan) | Pra-proyek | Pak Mulya & Legal | In Review |
 | DLV-12 | Go-Live (migrasi staging → production VPS pada server mitra Kodeintekno, domain utama — lihat §13 butir 15, SSL) + training (Superadmin, Admin, Mentor, Taruna) + penyerahan hak akses utama (Superadmin, hosting, domain) dan dokumen/source code | Fase 5 | Pak Mulya & PMO | Pending |
 
-**Catatan status:** PRD v1.5 mengunci stack (NestJS + Next.js + PostgreSQL) dan melengkapi kebijakan operasional hasil audit celah: sesi/token, password, OTP, upload, reschedule, absensi, remedial default, UU PDP, retensi 5 tahun, uji restore berkala, Email Service, monitoring, migrasi berversion, zona WIB, definisi Support, bahasa Indonesia, dan sertifikat PDF bernomor unik. Nama resmi "Sekolah Pelayaran Indonesia". Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx`: tanggal selesai mengikat 19 Februari 2027, sel PIC kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian (terutama sebelum/dalam Fase 1). Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
+**Catatan status:** PRD v1.6 mengunci front-end React + TypeScript (SPA, Vite) dan storage/streaming video Bunny Stream (transcoding otomatis, HLS adaptif, CDN, player bawaan, token authentication; tarif berbasis GB sehingga paling murah untuk pola tonton ulang), menggantikan seluruh opsi ngambang sebelumnya. Nama resmi "Sekolah Pelayaran Indonesia". Diselaraskan dengan `detail_fase_pekerjaan_SPI.md` dan workbook `Maritim Team & Timeline.xlsx`: tanggal selesai mengikat 19 Februari 2027, sel PIC kosong dibiarkan untuk sementara. Keputusan teknis pada §13 yang belum bertanda ✓ dilengkapi kemudian (terutama sebelum/dalam Fase 1). Dokumen harus ditinjau bersama Project Manager, tim pengembang, dan klien sebelum dijadikan acuan implementasi final.
