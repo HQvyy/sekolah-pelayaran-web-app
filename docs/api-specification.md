@@ -1,7 +1,7 @@
 # REST API Specification — E-Learning Sekolah Pelayaran Indonesia
 
 - **Status:** Draft kontrak API untuk memulai implementasi
-- **Versi acuan produk:** PRD v1.8
+- **Versi acuan produk:** PRD ringkas (menggantikan PRD lengkap v1.8; riwayat lengkap tersedia di histori git)
 - **Base path:** `/api/v1`
 - **Format:** JSON, kecuali upload file dan unduhan PDF/CSV/XLSX
 - **Zona waktu tampilan:** `Asia/Jakarta`; timestamp API disarankan ISO 8601 UTC
@@ -135,7 +135,7 @@ Matriks ini adalah baseline untuk diskusi; permission rinci masih harus disetuju
 
 ## 3. Authentication & account management
 
-Endpoint berikut merupakan rancangan kontrak untuk kebutuhan FR-AUTH. Beberapa nama endpoint tidak dicantumkan eksplisit pada daftar endpoint PRD dan karenanya merupakan usulan.
+Endpoint berikut merupakan rancangan kontrak untuk kebutuhan autentikasi dan akun (§4.1 PRD ringkas). Beberapa nama endpoint tidak dicantumkan eksplisit pada daftar endpoint PRD dan karenanya merupakan usulan.
 
 | Method & path | Tujuan | Akses |
 |---|---|---|

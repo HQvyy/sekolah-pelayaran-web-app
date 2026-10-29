@@ -1,7 +1,7 @@
 # Architecture — E-Learning Sekolah Pelayaran Indonesia
 
 - **Status:** Draft untuk review tim
-- **Versi acuan produk:** PRD v1.8
+- **Versi acuan produk:** PRD ringkas (menggantikan PRD lengkap v1.8; riwayat lengkap tersedia di histori git)
 - **Bahasa utama:** Bahasa Indonesia
 - **Dokumen terkait:** `prd.md`, `api-specification.md`
 
@@ -13,7 +13,7 @@ Aplikasi adalah web e-learning responsif untuk Sekolah Pelayaran Indonesia. Arsi
 
 Prinsip utama:
 
-1. PRD v1.8 adalah sumber kebutuhan produk utama.
+1. PRD ringkas adalah sumber kebutuhan produk utama (detail historis: PRD lengkap v1.8 di histori git).
 2. Frontend dan backend berada dalam satu repository, tetapi merupakan dua aplikasi terpisah.
 3. Backend adalah sumber kebenaran untuk autentikasi, izin akses, timer CBT, penilaian, progres, absensi, penerbitan sertifikat, dan seluruh validasi business rule.
 4. PostgreSQL menjadi database utama. Frontend tidak pernah mengakses database secara langsung.
@@ -100,14 +100,14 @@ Catatan:
 Saran workflow:
 
 - `main`: branch integrasi yang selalu dapat dibangun dan diuji.
-- `backend`: branch kerja backend.
-- `frontend`: branch kerja frontend.
+- `be`: branch kerja backend (Rafi).
+- `fe`: branch kerja frontend (Khenzo).
 - Buat Pull Request ke `main`; hindari push langsung ke `main`.
 - Sebelum mulai fitur, sepakati kontrak endpoint, DTO, status, dan perilaku error yang diperlukan kedua sisi.
 - Perubahan `docs/api-specification.md` yang berdampak pada integrasi harus dikomunikasikan dan direview oleh kedua developer.
 - Integrasikan fitur secara vertikal sedikit demi sedikit (misalnya login, lalu kursus), bukan menunggu semua backend/frontend selesai.
 
-Branch bernama `backend` dan `frontend` adalah workflow yang disarankan. Jika repository sudah memiliki konvensi branch lain, pertahankan konvensi yang ada dan sepakati padanannya.
+Branch `be` dan `fe` sudah ada di remote dan dipakai sebagai branch kerja. Jangan membuat branch `backend`/`frontend` baru agar tidak ganda.
 
 ## 5. Batas tanggung jawab
 
@@ -188,7 +188,7 @@ Rincian permission per aksi harus disepakati pada Fase 1. Jika permission spesif
 ### Integrasi eksternal
 
 - Bunny Stream dipakai untuk video. Secret/token dibuat di backend; jangan pernah menaruh secret di bundle frontend.
-- Layanan Zoom/Meet dan paketnya **[PERLU KONFIRMASI sesuai PKS]**. Taruna masuk melalui tombol di aplikasi; jangan menampilkan/membagikan URL eksternal secara langsung sebagai pengganti alur aplikasi.
+- Layanan Zoom/Meet dan paketnya **[PERLU KONFIRMASI sesuai PKS]**. Taruna masuk melalui tombol di aplikasi; URL eksternal tidak dibagikan sebagai alur normal.
 - Provider email spesifik **[PERLU KONFIRMASI]**.
 - Notifikasi tambahan di luar email dan in-app **[PERLU KONFIRMASI]**.
 
