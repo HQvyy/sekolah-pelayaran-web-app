@@ -34,7 +34,7 @@ Prinsip utama:
 | API docs | Swagger/OpenAPI dan Postman Collection | Outline disiapkan awal, dokumentasi lengkap diperbarui selama implementasi |
 | Hosting | VPS/server mitra Kodeintekno | Domain production, provider email, paket Live Lesson, dan beberapa detail deployment masih perlu konfirmasi |
 
-**Belum ditetapkan oleh PRD:** ORM, library frontend routing/state management, strategi monorepo tooling, provider email spesifik, dan mekanisme transport token. Tim boleh mengusulkan pilihan implementasi, tetapi mencatatnya dalam keputusan teknis sebelum dipakai oleh kedua sisi.
+**Belum ditetapkan oleh PRD:** library frontend routing/state management, strategi monorepo tooling, provider email spesifik. ORM ditetapkan (lihat §10); transport token ditetapkan (lihat §8). Tim boleh mengusulkan pilihan implementasi untuk sisanya, tetapi mencatatnya dalam keputusan teknis sebelum dipakai oleh kedua sisi.
 
 ## 3. Struktur repository
 
@@ -169,7 +169,7 @@ Rincian permission per aksi harus disepakati pada Fase 1. Jika permission spesif
 - 5 login gagal berturut-turut: kunci sementara 15 menit.
 - OTP 6 digit, kedaluwarsa 5 menit, maksimal 5 percobaan per kode, resend maksimal sekali setiap 60 detik.
 - Jika email gagal terkirim 3 kali berturut-turut, kunci sementara 15 menit dan tulis audit log.
-- Access token maksimal 1 jam; refresh token maksimal 30 hari, rotasi satu kali pakai dan dicabut saat logout.
+- Access token dikirim via Authorization Bearer header (short-lived, maksimal 1 jam); refresh token disimpan di cookie HttpOnly + Secure + SameSite=Lax, rotasi satu kali pakai dan dicabut saat logout. CORS allowlist dari environment; CSRF dilindungi via SameSite cookie + origin check (tanpa CSRF token terpisah selama mutasi auth memakai cookie). Keputusan dikunci — FE dan BE wajib memakai mekanisme yang sama.
 - Maksimal 3 perangkat bersamaan; login perangkat ke-4 mencabut sesi terlama. Superadmin dapat forced logout.
 - Reset password menggunakan tautan email sekali pakai yang kedaluwarsa setelah 1 jam.
 - Mekanisme pemulihan akun selain reset email masih **[PERLU KONFIRMASI]**.
@@ -222,6 +222,12 @@ Aturan:
 - Backup bulanan berpotensi kehilangan hingga 30 hari data. Backup harian merupakan Change Request bila tidak termasuk kesepakatan.
 - Domain production, detail monitoring, kapasitas server, dan paket layanan eksternal harus dikonfirmasi.
 
+## 10. Migrasi database (dikunci)
+
+- ORM: Prisma (PostgreSQL). Skema didefinisikan code-first di `backend/prisma/schema.prisma`; migrasi via `prisma migrate`.
+- Aturan: tidak ada perubahan skema manual langsung di production; setiap perubahan lewat file migrasi berversion yang direview; seed hanya untuk dev/test dan tidak berjalan otomatis di production.
+- Rollback memakai snapshot backup terakhir yang terverifikasi (lihat §10 environment).
+
 ## 11. Target performa awal
 
 Target awal PRD, menunggu finalisasi pada Fase 1:
@@ -248,10 +254,17 @@ Sebuah fitur siap diintegrasikan jika:
 
 Go-Live hanya setelah bug kritis selesai, keamanan yang disepakati terpenuhi, UAT disetujui, deployment dan dokumentasi siap, serta persetujuan deployment diterima.
 
-## 13. Keputusan terbuka sebelum baseline final
+## 15. Aturan impor berkas (dikunci: wajib .xlsx)
 
-1. Transport access/refresh token (misalnya Bearer access token + refresh token pada HttpOnly cookie) dan konfigurasi CORS/CSRF.
-2. ORM dan strategi migration PostgreSQL.
+- Format impor untuk akun Taruna dan bank soal adalah **Excel (.xlsx) saja, bukan CSV** — teks soal mengandung koma, petik, dan baris baru sehingga CSV mudah pecah.
+- Setiap halaman upload wajib menyediakan tombol **Download Template** (.xlsx kosong dengan judul kolom baku); template kolom final disepakati pada Fase 1.
+- Strategi validasi: **berhasil sebagian + unduh log eror** — baris valid masuk, baris gagal dilaporkan tanpa menggagalkan seluruh impor. Berkas log perbaikan (.xlsx) menandai sel eror (misalnya warna merah) beserta keterangan eror per baris agar dapat diperbaiki dan diunggah ulang.
+- Batas maksimal 500 baris per berkas tetap berlaku.
+
+## 16. Keputusan terbuka sebelum baseline final
+
+1. ~~Transport access/refresh token dan konfigurasi CORS/CSRF~~ — **diputuskan:** access via Bearer header, refresh di cookie HttpOnly + Secure + SameSite=Lax; CORS allowlist dari environment (lihat §8).
+2. ~~ORM dan strategi migration PostgreSQL~~ — **diputuskan:** Prisma code-first, `prisma migrate`, tanpa ubah skema manual di production (lihat §10).
 3. Provider email dan konfigurasi domain pengirim.
 4. Penyedia/paket layanan Zoom atau Google Meet dan metode join yang disepakati PKS.
 5. Konfirmasi aturan assessment: passing grade, jumlah attempt, jeda, remedial.
@@ -260,6 +273,6 @@ Go-Live hanya setelah bug kritis selesai, keamanan yang disepakati terpenuhi, UA
 8. Target performa final dan metode uji UAT.
 9. Notifikasi tambahan di luar email/in-app.
 10. Domain production, monitoring, serta batasan SLA bug kritis/minor.
-11. Detail pengelolaan materi/bank soal dan format impor final dari klien.
+11. Detail pengelolaan materi/bank soal dan template kolom impor final — **format dikunci .xlsx** (lihat §15); tersisa template kolom final.
 
 Keputusan harus dicatat bersama dalam dokumen teknis/decision log sebelum memengaruhi kedua implementasi.

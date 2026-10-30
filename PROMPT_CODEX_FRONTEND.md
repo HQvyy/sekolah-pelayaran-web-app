@@ -83,7 +83,7 @@ Halaman/alur:
 Aturan:
 - Registrasi publik hanya untuk Taruna; jangan tampilkan pilihan signup Admin/Mentor/Superadmin.
 - Ikuti endpoint, payload, response, dan error dari api-specification.md. Jika API belum ada, buat API service typed dengan TODO yang jelas; jangan membuat endpoint baru atau memalsukan keberhasilan login.
-- Jangan menyimpan password/OTP di localStorage, log, URL, atau state persisten. Strategi penyimpanan access/refresh token harus mengikuti keputusan arsitektur yang disetujui. Jika belum diputuskan, catat blocker dan jangan memilih strategi berbeda dari backend.
+- Jangan menyimpan password/OTP di localStorage, log, URL, atau state persisten. Token mengikuti keputusan arsitektur yang dikunci: access via Bearer header (memory), refresh via cookie HttpOnly (browser menyimpan otomatis, FE tidak menyentuh). Jangan memilih strategi berbeda dari backend.
 - Setelah login/OTP sukses, gunakan data `/auth/me` atau kontrak setara untuk memuat user dan role. Route guard hanya untuk UX.
 - Semua pesan validasi dan error ditulis dalam Bahasa Indonesia, tanpa mengungkap apakah email terdaftar pada forgot-password.
 
@@ -97,7 +97,7 @@ Implementasikan halaman frontend untuk akun, verifikasi Taruna, Angkatan/Kelas, 
 
 - Buat navigasi/dashboard awal yang berbeda sesuai role Superadmin, Admin, Mentor, dan Taruna, tetapi jangan mengarang KPI yang belum didukung API.
 - Halaman daftar/detail pengguna, pencarian/filter/pagination, form create/edit sesuai permission, serta alur verifikasi Taruna.
-- Halaman import CSV/XLSX maksimal 500 baris, penjelasan batas file, state upload/progress, dan ringkasan baris sukses/gagal dari response backend. Jangan menyatakan berhasil sebelum server mengembalikan hasil.
+- Halaman import .xlsx (bukan CSV) maksimal 500 baris: tombol download template, penjelasan batas file, state upload/progress, ringkasan baris sukses/gagal, dan tombol unduh berkas log perbaikan dari response backend. Jangan menyatakan berhasil sebelum server mengembalikan hasil.
 - Halaman CRUD Angkatan/Kelas dan pengelolaan enrollment sesuai endpoint dan izin yang terdokumentasi.
 - Gunakan dialog konfirmasi untuk tindakan penting, pesan error field-level jika tersedia, dan empty state yang membantu.
 - Jangan mengasumsikan seluruh Admin memiliki permission Superadmin. Sembunyikan action yang tidak relevan untuk UX, namun tetap tampilkan error 403 dari backend secara benar.

@@ -29,7 +29,7 @@ Accept: application/json
 Authorization: Bearer <access_token>
 ```
 
-`Authorization` diperlukan untuk endpoint terlindungi. Cara transport token final **[PERLU KONFIRMASI]**; contoh Bearer di dokumen ini adalah kontrak sementara. Jika tim memilih cookie-based session/refresh, dokumentasi security dan CSRF harus diperbarui bersama, bukan diterapkan berbeda antara frontend dan backend.
+`Authorization: Bearer <access_token>` diperlukan untuk endpoint terlindungi. **Keputusan dikunci:** access token via Bearer header; refresh token via cookie HttpOnly + Secure + SameSite=Lax (lihat architecture §8). CORS allowlist dari environment; proteksi CSRF via SameSite + origin check.
 
 Untuk endpoint idempotent seperti autosave/submit attempt atau operasi yang berpotensi terkirim ulang, gunakan `Idempotency-Key` bila sesuai dan didukung endpoint. Detail wajib ditetapkan per endpoint saat implementasi.
 
@@ -153,8 +153,9 @@ Endpoint berikut merupakan rancangan kontrak untuk kebutuhan autentikasi dan aku
 | `GET /admin/users/{userId}` | Detail pengguna | Superadmin/Admin sesuai permission |
 | `PATCH /admin/users/{userId}` | Mengubah data/status/role sesuai izin | Superadmin/Admin sesuai permission |
 | `POST /admin/users/{userId}/verify` | Verifikasi akun Taruna | Admin/Superadmin |
-| `POST /admin/users/import` | Impor Taruna CSV/Excel, maksimal 500 baris per file | Admin/Superadmin |
+| `POST /admin/users/import` | Impor Taruna via .xlsx (bukan CSV), maksimal 500 baris per file; berhasil sebagian + unduh log eror | Admin/Superadmin |
 | `GET /admin/users/imports/{importId}` | Status dan ringkasan baris berhasil/gagal | Admin/Superadmin |
+| `GET /admin/users/imports/template` | Unduh template .xlsx kosong (judul kolom baku) untuk impor akun | Admin/Superadmin |
 | `GET /admin/users/{userId}/sessions` | Daftar sesi/perangkat | Superadmin atau pemilik sesi sesuai kebijakan |
 | `DELETE /admin/users/{userId}/sessions/{sessionId}` | Forced logout/revoke session | Superadmin |
 
@@ -279,6 +280,8 @@ Ketentuan:
 | `GET /mentor/essay-grading` | Daftar esai yang perlu dinilai | Mentor/pemeriksa berwenang |
 | `POST /attempts/{attemptId}/answers/{answerId}/grade` | Memberi nilai/feedback esai | Mentor/pemeriksa berwenang |
 | `GET /admin/assessments/overdue-grading` | Daftar esai melewati SLA 7 hari | Admin |
+| `POST /assessments/{id}/questions/import` | Impor bank soal via .xlsx (berhasil sebagian + unduh log eror) | Role pengelola berwenang |
+| `GET /assessments/questions/import-template` | Unduh template .xlsx kosong bank soal | Role pengelola berwenang |
 
 ### CBT contract rules
 
@@ -291,7 +294,7 @@ Ketentuan:
 - Pilihan ganda dinilai otomatis; esai dinilai manual oleh mentor/pemeriksa berwenang.
 - SLA penilaian esai maksimal 7 hari kalender sejak submit; jika lewat, ditandai terlambat dan dilaporkan ke Admin.
 - Default PRD yang perlu konfirmasi: passing grade 70, maksimal 3 attempt, jeda 24 jam, remedial mengulang level.
-- Bank soal disediakan klien; dukung impor CSV/Excel sesuai template yang disepakati, jangan membuat isi bank soal atas nama klien.
+- Bank soal disediakan klien; impor hanya via .xlsx (bukan CSV) sesuai template yang disepakati + tombol download template; strategi berhasil sebagian + unduh log eror (sel eror ditandai + keterangan per baris); jangan membuat isi bank soal atas nama klien.
 
 ## 9. Progress, unlock, rating, dan feedback
 
@@ -366,7 +369,7 @@ Endpoint operasional ini adalah usulan teknis. Respons production tidak boleh me
 - Gunakan multipart/form-data hanya pada endpoint upload yang disepakati.
 - Validasi MIME type dan isi file di server; jangan hanya mengandalkan nama ekstensi.
 - Terapkan batas ukuran, autentikasi, permission, malware scanning, dan nama file yang aman.
-- CSV/Excel import maksimal 500 baris untuk impor pengguna sesuai PRD; respons harus merangkum baris berhasil dan gagal, dengan error per baris tanpa membocorkan data pribadi berlebihan.
+- Impor .xlsx (akun dan bank soal) maksimal 500 baris per berkas; strategi berhasil sebagian + unduh berkas log perbaikan (.xlsx dengan sel eror ditandai + keterangan per baris); respons merangkum baris berhasil dan gagal dengan error per baris tanpa membocorkan data pribadi berlebihan.
 - PDF sertifikat/ekspor absensi harus menggunakan `Content-Type` yang tepat dan nama file aman.
 - URL download harus memeriksa hak akses; jangan gunakan URL publik permanen untuk data privat.
 
@@ -451,10 +454,10 @@ Respons:
 ## 17. Daftar keputusan yang wajib ditutup
 
 1. Format respons standar (`data/meta`, `error`) dan format pagination.
-2. Transport access/refresh token, cookie/CORS/CSRF.
+2. ~~Transport access/refresh token~~ — **diputuskan:** Bearer header + cookie HttpOnly (lihat §1.2).
 3. Daftar permission final per role dan per resource.
 4. Nama/status final untuk assessment attempt dan ticket transitions.
-5. Format impor CSV/Excel, header kolom, dan cara mengunduh laporan error.
+5. ~~Format impor~~ — **diputuskan .xlsx + berhasil sebagian + unduh log eror** (lihat §14); tersisa template kolom final.
 6. Alur upload Bunny Stream dan pembentukan token playback.
 7. Layanan Zoom/Meet, paket, dan mekanisme join yang memenuhi aturan tidak membagikan tautan langsung.
 8. Aturan assessment final: passing grade, maksimal attempt, jeda dan remedial.

@@ -39,7 +39,7 @@ Sebelum coding, audit repository dan dokumen yang benar-benar tersedia:
 - docs/api-specification.md
 - package.json, lockfile, struktur folder, konfigurasi, migration/schema, test, CI, dan README yang sudah ada
 
-Jangan menganggap file telah dibaca jika tidak ditemukan. Laporkan nama/path dokumen yang ditemukan dan yang hilang. Cocokkan kebutuhan PRD dengan api-specification.md. Buat daftar endpoint dan domain yang sudah ada, belum ada, atau tidak konsisten. Identifikasi kontrak yang masih berupa usulan dan keputusan [PERLU KONFIRMASI], termasuk ORM/migration tool, transport token, provider email, provider Live Lesson, aturan CBT final, permission rinci, dan verifikasi publik/QR sertifikat.
+Jangan menganggap file telah dibaca jika tidak ditemukan. Laporkan nama/path dokumen yang ditemukan dan yang hilang. Cocokkan kebutuhan PRD dengan api-specification.md. Buat daftar endpoint dan domain yang sudah ada, belum ada, atau tidak konsisten. Identifikasi kontrak yang masih berupa usulan dan keputusan [PERLU KONFIRMASI], termasuk provider email, provider Live Lesson, aturan CBT final, permission rinci, dan verifikasi publik/QR sertifikat. Transport token (Bearer + HttpOnly cookie) dan ORM/migration (Prisma code-first) sudah diputuskan — jangan mengusulkan ulang, langsung pakai.
 
 Buat atau perbarui hanya dokumen perencanaan backend jika diperlukan, misalnya docs/backend-implementation-plan.md, yang berisi:
 1. Urutan implementasi backend per tahap.
@@ -85,7 +85,7 @@ Kebutuhan:
 - Maksimal 3 perangkat/sesi aktif; sesi ke-4 mencabut sesi terlama. Superadmin dapat force logout.
 - Jangan menganggap login selesai sebelum OTP tervalidasi. Terapkan rate limiting pada login, OTP, resend, dan reset.
 
-Penting: mekanisme transport token (Bearer vs cookie) masih perlu konfirmasi di dokumen arsitektur/API. Sebelum mengimplementasikan refresh/session, periksa keputusan yang sudah disetujui. Jika belum ada, usulkan pilihan dengan trade-off dan catat sebagai blocker/keputusan terbuka; jangan membuat frontend dan backend menggunakan mekanisme berbeda. Untuk provider email yang belum tersedia, gunakan interface/adapter dan fake provider hanya pada test. Jangan mengklaim email terkirim sungguhan jika provider belum terkonfigurasi.
+Penting: transport token sudah diputuskan (access via Bearer header, refresh di cookie HttpOnly + Secure + SameSite=Lax; CORS allowlist dari environment — lihat architecture §8). Implementasikan sesuai keputusan; jangan membuat frontend dan backend menggunakan mekanisme berbeda. Untuk provider email yang belum tersedia, gunakan interface/adapter dan fake provider hanya pada test. Jangan mengklaim email terkirim sungguhan jika provider belum terkonfigurasi.
 
 Terapkan guard/decorator dan authorization server-side. Buat test untuk role, OTP kedaluwarsa/salah/percobaan habis, throttle resend, lockout, refresh rotation/reuse, logout, session limit, dan reset token. Jangan membuat password default hardcoded atau akun production otomatis. STOP setelah test dan laporan.
 ```
@@ -98,7 +98,7 @@ Implementasikan hanya domain users, verifikasi akun, import, cohorts/classes, da
 - Endpoint daftar/detail/pencarian/filter pengguna dengan pagination dan field pribadi seminimal mungkin.
 - Admin/Superadmin memverifikasi pendaftaran Taruna sesuai matriks permission yang telah disepakati.
 - Manajemen akun Mentor/Admin/Superadmin hanya untuk pihak berwenang; cegah privilege escalation dan perubahan role oleh pengguna yang tidak berhak.
-- Impor CSV/XLSX Taruna maksimal 500 baris per file, validasi tipe/ukuran file, validasi setiap baris, penanganan duplikasi, serta laporan hasil per baris. Gunakan transaksi/batch yang aman dan jelaskan apakah proses parsial atau atomik sesuai kontrak yang disetujui.
+- Impor .xlsx Taruna (bukan CSV) maksimal 500 baris per file, validasi tipe/ukuran file, validasi setiap baris, penanganan duplikasi, strategi berhasil sebagian + berkas log perbaikan (.xlsx dengan sel eror ditandai + keterangan per baris), serta laporan hasil per baris. Gunakan transaksi/batch yang aman dan jelaskan apakah proses parsial atau atomik sesuai kontrak yang disetujui.
 - CRUD Angkatan/Kelas dan enrollment Taruna. Enrollment harus dipakai sebagai dasar otorisasi akses ke materi, kelas, Live Lesson, dan assessment.
 - Audit log untuk perubahan status akun, role, verifikasi, import, dan enrollment.
 
