@@ -7,7 +7,7 @@
 - **Zona waktu tampilan:** `Asia/Jakarta`; timestamp API disarankan ISO 8601 UTC
 - **Dokumen terkait:** `prd.md`, `architecture.md`
 
-> Endpoint di bawah menggabungkan endpoint yang disebut eksplisit di PRD dengan rancangan REST yang diperlukan untuk kebutuhan fungsional. Endpoint yang belum disebut eksplisit di PRD adalah **usulan teknis** dan harus direview sebelum dianggap kontrak final. Implementasikan endpoint sesuai tahap; jangan membangun seluruh API sekaligus.
+> Tabel endpoint di bawah adalah rancangan REST berdasarkan kebutuhan fungsional PRD ringkas — PRD tidak mencantumkan daftar endpoint, sehingga seluruh tabel adalah **usulan teknis** dan harus direview sebelum dianggap kontrak final. Implementasikan endpoint sesuai tahap; jangan membangun seluruh API sekaligus. Seluruh path di bawah memakai base `/api/v1` (misalnya `POST /auth/register` berarti `POST /api/v1/auth/register`).
 
 ## 1. Konvensi umum
 
@@ -219,7 +219,7 @@ Hierarki konten video: **kategori jenis kapal → kursus → bab → materi vide
 
 ## 6. Video / Bunny Stream
 
-PRD secara eksplisit mencantumkan beberapa endpoint video berikut; nama request/response detail perlu difinalkan pada implementasi.
+Tabel berikut adalah usulan endpoint video berdasarkan kebutuhan §4.2 dan §4.6 PRD ringkas; nama request/response detail perlu difinalkan pada implementasi.
 
 | Method & path | Tujuan | Akses |
 |---|---|---|
