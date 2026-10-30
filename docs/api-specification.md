@@ -1,4 +1,4 @@
-# REST API Specification — E-Learning Sekolah Pelayaran Indonesia
+# REST API Specification — E-Learning Sekolah Pelaut Indonesia
 
 - **Status:** Draft kontrak API untuk memulai implementasi
 - **Versi acuan produk:** PRD ringkas (menggantikan PRD lengkap v1.8; riwayat lengkap tersedia di histori git)

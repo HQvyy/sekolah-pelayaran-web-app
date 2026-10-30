@@ -1,4 +1,4 @@
-# PRD Ringkas — Web Apps Sekolah Pelayaran Indonesia
+# PRD Ringkas — Web Apps Sekolah Pelaut Indonesia
 
 **Versi:** Ringkasan PRD v1.8 (Draft untuk review dan validasi)  
 **Klien/stakeholder:** Pak Mulya / Pak Mulyana  
@@ -11,7 +11,7 @@
 
 ## 1. Ringkasan Produk dan Tujuan
 
-Web Apps Sekolah Pelayaran Indonesia adalah platform e-learning untuk pendidikan awal taruna maritim. Sistem menggabungkan materi berdasarkan jenis kapal, video pembelajaran, kelas langsung bersama mentor, ujian kompetensi lima level, pemantauan progres, sertifikat digital, dan layanan pengaduan.
+Web Apps Sekolah Pelaut Indonesia adalah platform e-learning untuk pendidikan awal taruna maritim. Sistem menggabungkan materi berdasarkan jenis kapal, video pembelajaran, kelas langsung bersama mentor, ujian kompetensi lima level, pemantauan progres, sertifikat digital, dan layanan pengaduan.
 
 Tujuan utama:
 - Menyusun materi secara terstruktur berdasarkan **Kategori Kapal → Kursus → Bab → Materi Video**.
@@ -92,7 +92,7 @@ Fitur di luar ruang lingkup harus melalui **Change Request** dan persetujuan pih
 
 ### 4.5 Rating, feedback, sertifikat
 - Taruna memberi rating kelas/mentor skala 1–5; rating tidak anonim dan dapat diubah satu kali dalam 7 hari setelah pemberian pertama.
-- Sertifikat berupa PDF bernomor unik, diterbitkan hanya jika syarat kelulusan terpenuhi. Sertifikat adalah **sertifikat internal program Sekolah Pelayaran Indonesia, bukan sertifikat resmi STCW**.
+- Sertifikat berupa PDF bernomor unik, diterbitkan hanya jika syarat kelulusan terpenuhi. Sertifikat adalah **sertifikat internal program Sekolah Pelaut Indonesia, bukan sertifikat resmi STCW**.
 - Keputusan apakah sertifikat membutuhkan halaman verifikasi publik/QR dibuat sebelum Fase 3; QR/halaman verifikasi tidak termasuk MVP.
 
 ### 4.6 Dashboard dan ticketing

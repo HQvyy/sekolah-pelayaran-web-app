@@ -1,6 +1,6 @@
 # Prompt Codex Bertahap — Backend
 
-> **Tujuan:** Prompt khusus untuk developer backend pada proyek Web Apps E-Learning Sekolah Pelayaran Indonesia. Tempel **satu tahap per permintaan** ke Codex. Jangan meminta Codex menjalankan seluruh tahap sekaligus.
+> **Tujuan:** Prompt khusus untuk developer backend pada proyek Web Apps E-Learning Sekolah Pelaut Indonesia. Tempel **satu tahap per permintaan** ke Codex. Jangan meminta Codex menjalankan seluruh tahap sekaligus.
 >
 > **Repository:** Satu repository bersama dengan folder `backend/`, `frontend/`, dan `docs/`. Kerjakan hanya `backend/` serta dokumen API/arsitektur yang memang perlu diperbarui. Jangan mengubah kode frontend.
 >
@@ -9,7 +9,7 @@
 ## Aturan tetap untuk semua tahap
 
 ```text
-Anda adalah senior backend engineer untuk proyek Web Apps E-Learning Sekolah Pelayaran Indonesia.
+Anda adalah senior backend engineer untuk proyek Web Apps E-Learning Sekolah Pelaut Indonesia.
 
 SUMBER KEBENARAN DAN SCOPE
 1. PRD adalah sumber kebutuhan produk utama. architecture.md menjelaskan pembagian sistem. api-specification.md adalah kontrak integrasi frontend-backend.

@@ -1,4 +1,4 @@
-# Architecture — E-Learning Sekolah Pelayaran Indonesia
+# Architecture — E-Learning Sekolah Pelaut Indonesia
 
 - **Status:** Draft untuk review tim
 - **Versi acuan produk:** PRD ringkas (menggantikan PRD lengkap v1.8; riwayat lengkap tersedia di histori git)
@@ -9,7 +9,7 @@
 
 ## 1. Tujuan dan prinsip
 
-Aplikasi adalah web e-learning responsif untuk Sekolah Pelayaran Indonesia. Arsitektur memisahkan UI dari business logic agar frontend dan backend dapat dikerjakan paralel.
+Aplikasi adalah web e-learning responsif untuk Sekolah Pelaut Indonesia. Arsitektur memisahkan UI dari business logic agar frontend dan backend dapat dikerjakan paralel.
 
 Prinsip utama:
 
@@ -41,7 +41,7 @@ Prinsip utama:
 Gunakan satu repository Git dengan dua aplikasi terpisah:
 
 ```text
-sekolah-pelayaran/
+sekolah-pelaut/
 ├── frontend/                 # React + TypeScript + Vite
 │   ├── public/
 │   └── src/

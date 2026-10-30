@@ -1,5 +1,5 @@
 # DETAIL FASE PROYEK & TAHAPAN PEKERJAAN
-**Proyek:** Web E-Learning "Sekolah Pelayaran Indonesia" (SPI)
+**Proyek:** Web E-Learning "Sekolah Pelaut Indonesia" (SPLI)
 **Total Durasi:** 19 Oktober 2026 – 19 Februari 2027 (±17–18 minggu kalender; label M1–M21 adalah urutan kerja, bukan minggu kalender)
 
 > **Catatan keterkaitan dokumen:** acuan produk yang berlaku adalah `prd.md` (PRD ringkas). Jika ada perbedaan antara dokumen ini dan PRD, PRD yang berlaku.
@@ -12,7 +12,7 @@
 
 ### Tahapan Pekerjaan:
 1. **Kick-off & Requirement Analysis**
-   - Rapat *kick-off* dengan tim *Sekolah Pelayaran Indonesia* (Klien).
+   - Rapat *kick-off* dengan tim *Sekolah Pelaut Indonesia* (Klien).
    - Pengumpulan detail *business logic* (kurikulum kapal, spesifikasi 5 level ujian, dan alur kelas).
 2. **System Architecture & Database Design**
    - Pembuatan Entity Relationship Diagram (ERD) dan skema *database*.
@@ -22,7 +22,7 @@
    - Pembuatan sketsa tata letak halaman (Dashboard, Kelas, Modul Video, Ujian).
 4. **UI/UX Design (High Fidelity)**
    - Pembuatan *mockup* interaktif menggunakan Figma/Adobe XD.
-   - Penyesuaian tema visual, warna, dan tipografi sesuai identitas *Sekolah Pelayaran Indonesia*.
+   - Penyesuaian tema visual, warna, dan tipografi sesuai identitas *Sekolah Pelaut Indonesia*.
 5. **Design Review & Approval**
    - Presentasi purwarupa (prototype) desain kepada klien untuk mendapatkan persetujuan tertulis.
 
@@ -111,7 +111,7 @@
    - *Bug Fixing* berdasarkan hasil UAT.
 4. **Deployment & Go-Live**
    - Migrasi aplikasi dan *database* dari *server staging* ke *server production* (VPS).
-   - Pengaturan nama domain utama (contoh: *sekolahpelayaran.com*).
+   - Pengaturan nama domain utama (contoh: *sekolahpelaut.com*).
 5. **Training & Handover (Serah Terima)**
    - Pelaksanaan sesi pelatihan (*Training*) penggunaan aplikasi kepada Klien.
    - Penyerahan hak akses utama (*Superadmin, Hosting, Domain, akun Bunny Stream, akun email service, akun monitoring*) dan dokumen/source code terkait.
