@@ -1,6 +1,10 @@
 # Backend Implementation Plan — E-Learning Sekolah Pelaut Indonesia
 
-- **Status:** Draft perencanaan — hasil PROMPT BACKEND 0, re-audit 2026-11-02 (tanpa implementasi fitur, tanpa ubah kontrak API; non-teknis diparkir sesuai instruksi)
+- **Status:** Draft perencanaan — hasil PROMPT BACKEND 0 + persiapan Tahap 2 (disahkan pemilik repo 2026-11-02; tanpa implementasi fitur domain; non-teknis diparkir)
+- **Pengesahan pemilik repo (2026-11-02, mengikat untuk Tahap 2):**
+  1. Envelope respons `data/meta` + error `{ error: { code, message, details, requestId } }` (§6.1 butir 1) dinyatakan **FINAL sebagai kontrak kerja backend**; FE menyesuaikan.
+  2. Bentuk respons auth Tahap 2 mengikuti usulan api-spec §15.1: login mengembalikan `{ data: { status: "OTP_REQUIRED", challengeId, expiresAt } }`, **tanpa access token sebelum OTP valid**.
+  3. Matriks endpoint–role–ownership §4 dinyatakan **acuan mengikat** (Taruna = milik sendiri, Mentor = dalam assignment, Admin = operasional, Superadmin = forced logout + permanent delete beraudit).
 - **Acuan produk:** `docs/prd.md` (PRD ringkas, menggantikan PRD lengkap v1.8)
 - **Acuan teknis:** `docs/architecture.md`, `docs/api-specification.md`, `docs/detail_fase_pekerjaan_SPLI.md`
 - **Scope kerja backend:** hanya folder `backend/` + dokumen API/arsitektur yang memang perlu diperbarui. Jangan ubah `frontend/`.
