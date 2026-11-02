@@ -1,0 +1,23 @@
+// Skema Prisma code-first (keputusan dikunci — jangan ubah manual di production).
+// Tahap 1: fondasi teknis saja. Model domain (users, cohorts, CBT, dst.)
+// ditambahkan bertahap mulai Tahap 2 mengikuti ERD draft pada
+// docs/backend-implementation-plan.md §3 (status draft, belum disetujui).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabel penanda migrasi awal agar `prisma migrate` memiliki baseline.
+// Bukan data dummy: tidak ada seed, tidak ada akun/fitur.
+model SchemaBaseline {
+  id        String   @id @default(uuid()) @db.Uuid
+  note      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("schema_baseline")
+}

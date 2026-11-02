@@ -1,0 +1,66 @@
+# SPLI Backend — E-Learning Sekolah Pelaut Indonesia
+
+REST API backend (NestJS + TypeScript + PostgreSQL). Prefix API: `/api/v1`.
+Swagger: `/docs` (dapat dimatikan via `SWAGGER_ENABLED=false`).
+
+## Prasyarat
+
+- Node.js 22+ (teruji di Node 24), npm 10+
+- PostgreSQL 15+ (wajib di staging/production; opsional di dev/test — lihat Status DB)
+
+## Setup lokal
+
+```bash
+cd backend
+cp .env.example .env        # lalu isi DATABASE_URL dkk. per environment
+npm install
+npx prisma generate
+npx prisma migrate dev      # butuh DATABASE_URL valid
+npm run start:dev           # http://localhost:3000/api/v1/health
+```
+
+## Status DB tanpa koneksi
+
+Bila `DATABASE_URL` kosong (dev/test tanpa DB), aplikasi tetap boot:
+
+- `GET /api/v1/health` → `{ data: { status: "ok", ... }, meta: null }`
+- `GET /api/v1/ready` → `{ data: { status: "degraded", database: "not-configured", ... } }`
+- Bila `DATABASE_URL` terisi tetapi DB tidak terjangkau → `503 SERVICE_UNAVAILABLE`
+  tanpa detail koneksi di respons.
+
+## Migration (Prisma code-first — keputusan dikunci)
+
+- Skema: `prisma/schema.prisma`. Setiap perubahan skema lewat file migrasi
+  berversion yang direview: `npm run prisma:migrate`.
+- Deploy: `npm run prisma:deploy` (tidak ada `migrate dev` di staging/production).
+- Rollback: memakai snapshot backup terakhir yang terverifikasi.
+- Dilarang mengubah skema manual langsung di production.
+
+## Seed
+
+Tidak ada seed otomatis. Seed development (bila kelak diperlukan) wajib berada di
+file terpisah yang eksplisit dijalankan manual dan **tidak pernah** berjalan
+otomatis di production. Jangan menambahkan data dummy ke production.
+
+## Perintah
+
+| Perintah | Kegunaan |
+|---|---|
+| `npm run start:dev` | Jalankan watch mode |
+| `npm run build` / `npm run start:prod` | Build + jalankan hasil build |
+| `npm run lint` / `npm run lint:fix` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Unit test (`test/jest.unit.json`) |
+| `npm run test:e2e` | E2E test (`test/jest.e2e.json`, butuh DB bila menguji DB) |
+| `npm run prisma:validate` | Validasi skema Prisma tanpa DB |
+
+## Konvensi kode Tahap 1
+
+- Respons sukses: `{ data, meta: null }` (objek) atau
+  `{ data: [], meta: { page, pageSize, totalItems, totalPages } }` (daftar).
+- Error: `{ error: { code, message, details[], requestId } }` + `X-Request-Id`.
+- `pageSize` maks 100; `sortBy` hanya dari allowlist per endpoint.
+- Timestamp API: ISO 8601 UTC; tampilan WIB (Asia/Jakarta) di frontend.
+- Logging tanpa body/query (tanpa password, OTP, token, data pribadi).
+- Format respons berstatus **keputusan backend, menunggu pengesahan FE**
+  (lihat `docs/backend-implementation-plan.md` §6.1 butir 1).
