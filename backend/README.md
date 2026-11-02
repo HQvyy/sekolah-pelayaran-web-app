@@ -62,5 +62,27 @@ otomatis di production. Jangan menambahkan data dummy ke production.
 - `pageSize` maks 100; `sortBy` hanya dari allowlist per endpoint.
 - Timestamp API: ISO 8601 UTC; tampilan WIB (Asia/Jakarta) di frontend.
 - Logging tanpa body/query (tanpa password, OTP, token, data pribadi).
-- Format respons berstatus **keputusan backend, menunggu pengesahan FE**
-  (lihat `docs/backend-implementation-plan.md` §6.1 butir 1).
+- Format respons + matriks permission + bentuk respons auth berstatus
+  **FINAL sebagai kontrak kerja backend** (disahkan pemilik repo 2026-11-02;
+  lihat `docs/backend-implementation-plan.md`).
+
+## Auth Tahap 2 (ringkas)
+
+- Role: `SUPERADMIN`, `ADMIN`, `MENTOR`, `TARUNA`. Registrasi mandiri hanya
+  Taruna (consent PDP wajib); akun baru `PENDING_VERIFICATION`.
+- Password: min 8 karakter + huruf + angka; hash argon2id. 5 gagal login
+  beruntun → kunci 15 menit.
+- Login benar → `{ data: { status: "OTP_REQUIRED", challengeId, expiresAt } }`.
+  Access token (Bearer, ≤1 jam) hanya terbit setelah OTP valid.
+- OTP: 6 digit, 5 menit, ≤5 percobaan, resend ≥60 detik. 3 gagal kirim email
+  beruntun → kunci 15 menit + audit log.
+- Refresh: cookie `spli_refresh` (HttpOnly + Secure + SameSite=Lax, ≤30 hari),
+  rotasi sekali pakai; reuse = cabut semua sesi user. Maks 3 sesi aktif;
+  ke-4 mencabut sesi terlama. Superadmin force logout via
+  `DELETE /auth/sessions/:sessionId`.
+- Reset: `POST /auth/password/forgot` selalu sukses (anti-enumerasi); token
+  sekali pakai 1 jam; reset berhasil mencabut semua sesi.
+- Email: interface `EmailService`; `EMAIL_PROVIDER=fake` untuk dev/test
+  (tanpa pengiriman nyata). Provider real disuntik belakangan via environment.
+- Endpoint auth: `register`, `login`, `2fa/verify`, `2fa/resend`, `refresh`,
+  `logout`, `password/forgot`, `password/reset`, `me` — prefix `/api/v1/auth`.

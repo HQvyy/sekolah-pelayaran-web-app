@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { validationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -20,15 +24,24 @@ import { HealthModule } from './health/health.module';
     }),
     // Rate limit global default dari konfigurasi; endpoint sensitif
     // (login, OTP, reset) mendapat batas sendiri pada tahap auth.
+    // Di NODE_ENV=test, batas dilonggarkan agar E2E tidak saling menghabiskan
+    // kuota dari IP yang sama; proteksi nyata diuji via test header 429.
     ThrottlerModule.forRoot([
       {
         name: 'default',
-        limit: Number(process.env.THROTTLE_DEFAULT_LIMIT ?? 100),
+        limit:
+          process.env.NODE_ENV === 'test'
+            ? 10000
+            : Number(process.env.THROTTLE_DEFAULT_LIMIT ?? 100),
         ttl: Number(process.env.THROTTLE_DEFAULT_TTL_MS ?? 60000),
       },
     ]),
     DatabaseModule,
+    AuditModule,
+    NotificationsModule,
+    AuthModule,
     HealthModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

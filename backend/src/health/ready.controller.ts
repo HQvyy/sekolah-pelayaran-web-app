@@ -2,10 +2,13 @@ import { Controller, Get, HttpCode, ServiceUnavailableException } from '@nestjs/
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../database/prisma.service';
 import { ok } from '../common/envelope';
+import { Public } from '../modules/auth/public.decorator';
 
 // Readiness: siap menerima traffic bila database terjangkau.
+// Publik agar orchestrator bisa memeriksa; respons minimal tanpa secret.
 // Bila DATABASE_URL belum dikonfigurasi (dev/test tanpa DB), status
 // dilaporkan apa adanya tanpa membocorkan detail koneksi.
+@Public()
 @ApiTags('operational')
 @Controller()
 export class ReadyController {

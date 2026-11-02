@@ -31,4 +31,7 @@ export const validationSchema = Joi.object({
   REMEDIAL_AFTER_FAILURES: Joi.number().integer().min(1).default(3),
   EMAIL_PROVIDER: Joi.string().valid('fake', 'smtp').default('fake'),
   EMAIL_FROM: Joi.string().allow('').default(''),
+  // Secret penandatangan access token: tidak ada default; wajib diisi agar
+  // aplikasi tidak pernah berjalan dengan secret yang bisa ditebak.
+  JWT_SECRET: Joi.string().min(32).required(),
 });

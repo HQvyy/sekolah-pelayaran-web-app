@@ -1,7 +1,7 @@
 // Skema Prisma code-first (keputusan dikunci — jangan ubah manual di production).
-// Tahap 1: fondasi teknis saja. Model domain (users, cohorts, CBT, dst.)
-// ditambahkan bertahap mulai Tahap 2 mengikuti ERD draft pada
-// docs/backend-implementation-plan.md §3 (status draft, belum disetujui).
+// Tahap 2: fondasi identity & access (auth, 2FA OTP, session/refresh, reset, audit).
+// Model domain lain (cohort, konten, CBT, dst.) menyusul tahap berikutnya
+// mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
 
 generator client {
   provider = "prisma-client-js"
@@ -12,12 +12,137 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Tabel penanda migrasi awal agar `prisma migrate` memiliki baseline.
-// Bukan data dummy: tidak ada seed, tidak ada akun/fitur.
+// Tabel penanda migrasi awal. Bukan data dummy: tidak ada seed,
+// tidak ada akun/fitur.
 model SchemaBaseline {
   id        String   @id @default(uuid()) @db.Uuid
   note      String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("schema_baseline")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  MENTOR
+  TARUNA
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  LOCKED_TEMPORARY
+}
+
+model User {
+  id               String        @id @default(uuid()) @db.Uuid
+  email            String        @unique @db.Citext
+  passwordHash     String        @map("password_hash")
+  role             Role          @default(TARUNA)
+  status           AccountStatus @default(PENDING_VERIFICATION)
+  // Consent pemrosesan data pribadi (UU PDP) — wajib saat registrasi Taruna.
+  consentGivenAt   DateTime?     @map("consent_given_at") @db.Timestamptz(6)
+  // Lockout: 5 gagal login beruntun ATAU 3 gagal kirim email beruntun → 15 mnt.
+  failedLoginCount Int           @default(0) @map("failed_login_count")
+  failedEmailCount Int           @default(0) @map("failed_email_count")
+  lockedUntil      DateTime?     @map("locked_until") @db.Timestamptz(6)
+  // Verifikasi Taruna oleh Admin/Superadmin.
+  verifiedAt       DateTime?     @map("verified_at") @db.Timestamptz(6)
+  verifiedBy       String?       @map("verified_by") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  otpChallenges  OtpChallenge[]
+  sessions       Session[]
+  resetTokens    PasswordResetToken[]
+  auditLogs      AuditLog[]
+  verifiedByUser User?                @relation("UserVerifications", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifications  User[]               @relation("UserVerifications")
+
+  @@index([role, status])
+  @@map("users")
+}
+
+enum OtpPurpose {
+  LOGIN_2FA
+}
+
+enum OtpStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  EXHAUSTED
+}
+
+model OtpChallenge {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  purpose     OtpPurpose @default(LOGIN_2FA)
+  // Hanya hash OTP yang disimpan — tidak pernah plaintext.
+  otpHash     String     @map("otp_hash")
+  status      OtpStatus  @default(PENDING)
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5) @map("max_attempts")
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz(6)
+  // Throttle resend: 1x per 60 detik per challenge aktif.
+  lastSentAt  DateTime   @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  verifiedAt  DateTime?  @map("verified_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, expiresAt])
+  @@map("otp_challenges")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  // Hanya hash refresh token yang disimpan — tidak pernah plaintext.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  // Perangkat ke-4 mencabut sesi terlama: diurutkan via createdAt.
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // Hanya hash token yang disimpan — tidak pernah plaintext.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// Audit log minimal Tahap 2: perubahan status akun, verifikasi, forced logout,
+// kegagalan email pemicu lock, reset password. Tanpa secret/kredensial.
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String
+  targetId  String?  @map("target_id") @db.Uuid
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }
