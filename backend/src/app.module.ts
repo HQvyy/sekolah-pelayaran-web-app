@@ -9,6 +9,8 @@ import { HealthModule } from './health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { CohortsModule } from './modules/cohorts/cohorts.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AuthModule } from './modules/auth/auth.module';
     AuditModule,
     NotificationsModule,
     AuthModule,
+    UsersModule,
+    CohortsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

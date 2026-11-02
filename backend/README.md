@@ -86,3 +86,27 @@ otomatis di production. Jangan menambahkan data dummy ke production.
   (tanpa pengiriman nyata). Provider real disuntik belakangan via environment.
 - Endpoint auth: `register`, `login`, `2fa/verify`, `2fa/resend`, `refresh`,
   `logout`, `password/forgot`, `password/reset`, `me` — prefix `/api/v1/auth`.
+
+## Users/Cohort Tahap 3 (ringkas)
+
+- Daftar users: Admin/Superadmin, pagination + filter role/status/search,
+  field minimal (tanpa password/hash). Taruna/Mentor ditolak (403).
+- Verifikasi Taruna: Admin/Superadmin, `POST /admin/users/:id/verify`
+  (`PENDING_VERIFICATION` → `ACTIVE`, selainnya 409); penolakan = `SUSPENDED`.
+- Akun non-Taruna: hanya Superadmin yang membuat (`POST /admin/users`) dan
+  mengubah role (`PATCH /admin/users/:id/role`); anti-escalation (tidak boleh
+  ubah diri sendiri; Superadmin terakhir tidak bisa diturunkan). Status juga
+  tidak boleh menonaktifkan diri sendiri.
+- Impor `.xlsx` (bukan CSV): `POST /admin/users/import` (multipart `file`,
+  ≤5 MB, ≤500 baris). Strategi **berhasil sebagian**: baris valid masuk
+  (masing-masing transaksi sendiri) + auto-enroll ke `cohort_kode`; baris
+  gagal dilaporkan per baris tanpa menggagalkan seluruh berkas.
+- Template: `GET /admin/users/imports/template`. Log perbaikan:
+  `GET /admin/users/imports/:importId/errors` (.xlsx sel eror merah +
+  `keterangan_eror`; disimpan di memori — unduh segera, hilang saat restart).
+- Cohort: CRUD Admin/Superadmin; nonaktifkan ditolak bila masih ada enrollment
+  aktif. Enroll hanya Taruna ACTIVE (duplikat aktif 409; re-enroll mengaktifkan
+  kembali). `GET /me/enrollments` milik Taruna sendiri.
+- Audit: verifikasi, status, role, pembuatan akun, impor, cohort, enrollment.
+- Postman: `postman/spli-backend-tahap-1-3.postman_collection.json`.
+  Swagger: `/docs` (tag operational, auth, admin-users, cohorts, me).

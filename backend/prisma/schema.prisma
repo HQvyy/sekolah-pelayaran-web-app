@@ -1,6 +1,7 @@
 // Skema Prisma code-first (keputusan dikunci — jangan ubah manual di production).
 // Tahap 2: fondasi identity & access (auth, 2FA OTP, session/refresh, reset, audit).
-// Model domain lain (cohort, konten, CBT, dst.) menyusul tahap berikutnya
+// Tahap 3: users, cohorts, enrollments, import .xlsx Taruna.
+// Model domain lain (konten, CBT, dst.) menyusul tahap berikutnya
 // mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
 
 generator client {
@@ -58,6 +59,8 @@ model User {
   sessions       Session[]
   resetTokens    PasswordResetToken[]
   auditLogs      AuditLog[]
+  enrollments    Enrollment[]
+  importJobs     ImportJob[]
   verifiedByUser User?                @relation("UserVerifications", fields: [verifiedBy], references: [id], onDelete: SetNull)
   verifications  User[]               @relation("UserVerifications")
 
@@ -130,8 +133,9 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-// Audit log minimal Tahap 2: perubahan status akun, verifikasi, forced logout,
-// kegagalan email pemicu lock, reset password. Tanpa secret/kredensial.
+// Audit log Tahap 2–3: perubahan status akun, verifikasi, forced logout,
+// kegagalan email pemicu lock, reset password, impor, enrollment.
+// Tanpa secret/kredensial.
 model AuditLog {
   id        String   @id @default(uuid()) @db.Uuid
   actorId   String?  @map("actor_id") @db.Uuid
@@ -145,4 +149,68 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// Angkatan/Kelas. Kode unik dipakai sebagai kunci impor .xlsx (cohort_kode).
+model Cohort {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollments Enrollment[]
+
+  @@map("cohorts")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Enrollment {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  cohortId  String           @map("cohort_id") @db.Uuid
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, cohortId])
+  @@index([cohortId, status])
+  @@map("enrollments")
+}
+
+enum ImportKind {
+  TARUNA_ACCOUNTS
+}
+
+enum ImportStatus {
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+}
+
+// Jejak impor .xlsx: ringkasan berhasil/gagal per berkas. Detail per baris
+// tidak disimpan di DB (ada di berkas log .xlsx yang diunduh), kecuali jumlah.
+model ImportJob {
+  id           String       @id @default(uuid()) @db.Uuid
+  kind         ImportKind   @default(TARUNA_ACCOUNTS)
+  fileName     String       @map("file_name")
+  totalRows    Int          @map("total_rows")
+  successCount Int          @map("success_count")
+  failedCount  Int          @map("failed_count")
+  status       ImportStatus
+  createdBy    String       @map("created_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([createdBy, createdAt])
+  @@map("import_jobs")
 }
