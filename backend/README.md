@@ -149,3 +149,30 @@ otomatis di production. Jangan menambahkan data dummy ke production.
 - Timestamp UTC; aturan tanggal backend konsisten; tampilan WIB di frontend.
 - Postman: `postman/spli-backend-tahap-1-5.postman_collection.json`.
   Swagger: `/docs` (+ tag live-lessons, notifications).
+
+## CBT Tahap 6 — slice satu level (ringkas)
+
+- Assessment per cohort per level (unik), durasi menit, status publikasi.
+  Aturan lulus (passing grade, maks attempt, jeda, remedial) = KONFIGURASI
+  sementara via env (default 70/3/24 jam/3) — bukan hardcode final,
+  menunggu konfirmasi klien. Perubahan nilai tidak mengubah kontrak.
+- Bank soal: PG + esai (DB memakai `ESSAY`; template `.xlsx` memakai `ESAI`).
+  Impor `.xlsx` ≤500 baris berhasil sebagian + log perbaikan; level baris
+  harus sama dengan level assessment. Template:
+  `GET /assessments/questions/import-template`.
+- Attempt: timer server (`serverNow/startedAt/expiresAt`), randomisasi
+  urutan soal+opsi tercatat untuk audit, tanpa answer key ke Taruna.
+  Kelayakan: enrollment aktif + assessment PUBLISHED + batas attempt + jeda.
+- Autosave per soal (last-write-wins); ditolak bila attempt final/kedaluwarsa.
+  Submit idempotent via `idempotencyKey` (payload identik → hasil sama;
+  attempt final → hasil tersimpan).
+- PG auto-grade server; esai dinilai Mentor/Admin beraudit (siapa, kapan,
+  skor ≤ bobot, feedback); finalisasi otomatis bila semua esai dinilai.
+  Antrean: `GET /mentor/essay-grading`; overdue SLA 7 hari:
+  `GET /admin/assessments/overdue-grading`.
+- Progres (`PASSED/FAILED`, skor terbaik, jumlah attempt) dihitung backend
+  dari attempt GRADED; tidak ada nilai dari client yang dipercaya.
+  `GET /me/progress`.
+- JANGAN menulis bank soal maritim — soal hanya dari impor klien/template.
+- Postman: `postman/spli-backend-tahap-1-6.postman_collection.json`.
+  Swagger: `/docs` (+ tag assessments).

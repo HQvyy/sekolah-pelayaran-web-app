@@ -3,7 +3,8 @@
 // Tahap 3: users, cohorts, enrollments, import .xlsx Taruna.
 // Tahap 4: konten pembelajaran (kategori kapal → kursus → bab → materi video).
 // Tahap 5: Live Lesson (jadwal, join, absensi) + notifikasi in-app.
-// Model domain lain (CBT, dst.) menyusul tahap berikutnya
+// Tahap 6: CBT lima level (bank soal, attempt, grading, progres).
+// Model domain lain menyusul tahap berikutnya
 // mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
 
 generator client {
@@ -63,6 +64,8 @@ model User {
   auditLogs      AuditLog[]
   enrollments    Enrollment[]
   importJobs     ImportJob[]
+  attempts       Attempt[]
+  progress       LearningProgress[]
   verifiedByUser User?                @relation("UserVerifications", fields: [verifiedBy], references: [id], onDelete: SetNull)
   verifications  User[]               @relation("UserVerifications")
 
@@ -166,6 +169,7 @@ model Cohort {
   enrollments Enrollment[]
   courses     Course[]
   liveLessons LiveLesson[]
+  assessments Assessment[]
 
   @@map("cohorts")
 }
@@ -435,4 +439,172 @@ model Notification {
 
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+enum QuestionType {
+  PG
+  ESSAY
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_GRADED
+  WAITING_MANUAL_GRADING
+  GRADED
+  EXPIRED
+}
+
+// Assessment CBT per level per cohort. Aturan kelulusan (passing grade, maks
+// attempt, jeda, remedial) adalah KONFIGURASI sementara (env), bukan hardcode
+// final — menunggu konfirmasi klien (PRD §4.4/§11, rencana §6.1 butir 4).
+model Assessment {
+  id              String        @id @default(uuid()) @db.Uuid
+  cohortId        String        @map("cohort_id") @db.Uuid
+  level           Int
+  title           String
+  description     String?
+  // Durasi pengerjaan dalam menit (timer server).
+  durationMinutes Int           @map("duration_minutes")
+  status          PublishStatus @default(DRAFT)
+  createdBy       String        @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cohort    Cohort             @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  questions Question[]
+  attempts  Attempt[]
+  progress  LearningProgress[]
+
+  @@unique([cohortId, level])
+  @@index([cohortId, status])
+  @@map("assessments")
+}
+
+model Question {
+  id           String       @id @default(uuid()) @db.Uuid
+  assessmentId String       @map("assessment_id") @db.Uuid
+  type         QuestionType
+  prompt       String
+  // Bobot nilai soal (default 1). Kunci jawaban TIDAK di sini untuk esai.
+  weight       Float        @default(1)
+  sortOrder    Int          @default(0) @map("sort_order")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assessment Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options    AnswerOption[]
+
+  @@index([assessmentId, sortOrder])
+  @@map("questions")
+}
+
+model AnswerOption {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  label      String
+  // Benar/salah HANYA di server; tidak pernah dikirim ke Taruna.
+  isCorrect  Boolean @default(false) @map("is_correct")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, sortOrder])
+  @@map("answer_options")
+}
+
+// Attempt: satu kali pengerjaan oleh satu Taruna. Timer authoritative di
+// server (startedAt/expiresAt); randomisasi urutan soal+opsi dicatat
+// (shuffledQuestionIds/shuffledOptionIds) untuk audit.
+model Attempt {
+  id                  String        @id @default(uuid()) @db.Uuid
+  assessmentId        String        @map("assessment_id") @db.Uuid
+  userId              String        @map("user_id") @db.Uuid
+  status              AttemptStatus @default(IN_PROGRESS)
+  startedAt           DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt           DateTime      @map("expires_at") @db.Timestamptz(6)
+  submittedAt         DateTime?     @map("submitted_at") @db.Timestamptz(6)
+  shuffledQuestionIds Json          @map("shuffled_question_ids") @db.JsonB
+  shuffledOptionIds   Json          @map("shuffled_option_ids") @db.JsonB
+  // Skor akhir 0–100 (PG auto + esai manual). Null selama belum final.
+  score               Float?
+  passed              Boolean?
+  // Idempotency: kunci client per submit agar request ulang aman.
+  submitKey           String?       @map("submit_key")
+  submitResult        Json?         @map("submit_result") @db.JsonB
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assessment Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+  grades     ManualGrade[]
+
+  @@index([userId, assessmentId, status])
+  @@index([assessmentId, status])
+  @@map("attempts")
+}
+
+// Jawaban per soal per attempt. Esai = teks; PG = optionId. updatedAt dipakai
+// untuk urutan autosave (last-write-wins per soal).
+model Answer {
+  id         String   @id @default(uuid()) @db.Uuid
+  attemptId  String   @map("attempt_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  optionId   String?  @map("option_id") @db.Uuid
+  essayText  String?  @map("essay_text")
+  // Skor PG per jawaban (0 atau weight); esai null sampai dinilai.
+  autoScore  Float?   @map("auto_score")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("answers")
+}
+
+// Penilaian esai manual oleh pemeriksa berwenang (siapa, kapan, skor, feedback).
+model ManualGrade {
+  id         String   @id @default(uuid()) @db.Uuid
+  attemptId  String   @map("attempt_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  graderId   String   @map("grader_id") @db.Uuid
+  score      Float
+  maxScore   Float    @map("max_score")
+  feedback   String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([graderId])
+  @@map("manual_grades")
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  PASSED
+  FAILED
+}
+
+// Progres per Taruna per assessment — dihitung backend, tidak dari client.
+model LearningProgress {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  assessmentId String         @map("assessment_id") @db.Uuid
+  status       ProgressStatus @default(NOT_STARTED)
+  bestScore    Float?         @map("best_score")
+  attemptsUsed Int            @default(0) @map("attempts_used")
+  passedAt     DateTime?      @map("passed_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assessmentId])
+  @@index([userId, status])
+  @@map("learning_progress")
 }
