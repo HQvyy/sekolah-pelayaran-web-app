@@ -176,3 +176,29 @@ otomatis di production. Jangan menambahkan data dummy ke production.
 - JANGAN menulis bank soal maritim — soal hanya dari impor klien/template.
 - Postman: `postman/spli-backend-tahap-1-6.postman_collection.json`.
   Swagger: `/docs` (+ tag assessments).
+
+## Rating/Sertifikat/Tiket Tahap 7 (ringkas)
+
+- Rating 1–5 non-anonim per kelas (lesson) + mentor; syarat: enrollment aktif
+  pada cohort lesson. Satu rating per (user, lesson); edit maksimal 1× dalam
+  7 hari sejak rating pertama (dihitung backend, 409 bila melanggar).
+  `POST /ratings`, `PATCH /ratings/:id`, `GET /me/ratings`,
+  `GET /classes/:classId/ratings` (Mentor kelasnya/Admin).
+- Sertifikat: syarat Opsi A (keputusan Tahap 7) — seluruh level 1–5 `PASSED`
+  pada cohort yang sama; selainnya 409. Nomor unik server-side
+  (`SPLI-TAHUN-XXXXXX`, retry anti-duplikat); terbit sekali per (user, cohort).
+  PDF mencantumkan disclaimer **bukan sertifikat resmi STCW**; tanpa QR/
+  verifikasi publik (di luar MVP). Unduh: pemilik + Admin/Superadmin
+  (`GET /certificates/:id/pdf`); Mentor ditolak. Nomor tidak dibuat ulang
+  saat unduh. `POST /certificates` (Admin), `GET /me/certificates`.
+- Tiket: `OPEN → IN_PROGRESS → RESOLVED → CLOSED` (+ buka ulang Admin
+  `RESOLVED/CLOSED → IN_PROGRESS`); transisi lain 422/409. Taruna: milik
+  sendiri (lintas pemilik disamarkan 404); ubah detail hanya saat OPEN.
+  Admin/Superadmin: support + ubah status. Mentor: tanpa akses (403).
+  Setiap perubahan tercatat di riwayat (actor, waktu, dari→ke, komentar).
+- Audit: rating, sertifikat, tiket (buat/ubah/status).
+- Keterbatasan verifikasi: isi teks PDF (nama + disclaimer) diverifikasi
+  visual saat UAT — ekstraksi teks otomatis tidak layak (PDFKit subset font
+  tanpa ToUnicode). Test memastikan PDF valid + milik benar + terproteksi.
+- Postman: `postman/spli-backend-tahap-1-7.postman_collection.json`.
+  Swagger: `/docs` (+ tag ratings, certificates, tickets).

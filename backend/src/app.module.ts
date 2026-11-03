@@ -16,6 +16,7 @@ import { VideosModule } from './modules/videos/videos.module';
 import { LiveLessonsModule } from './modules/live-lessons/live-lessons.module';
 import { ConferenceModule } from './modules/conference/conference.module';
 import { AssessmentsModule } from './modules/assessments/assessments.module';
+import { ServicesModule } from './modules/services/services.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { AssessmentsModule } from './modules/assessments/assessments.module';
     ConferenceModule,
     LiveLessonsModule,
     AssessmentsModule,
+    ServicesModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
