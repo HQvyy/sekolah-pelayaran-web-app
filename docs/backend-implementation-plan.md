@@ -13,6 +13,9 @@
   1. Provider konferensi: **yang termudah + murah/gratis** (prioritas: Jitsi Meet self-host/gratis → fallback Google Meet/Zoom bila PKS mengharuskan); metode join **embed di aplikasi** (iframe), bukan link eksternal.
   2. Jadwal dibuat oleh **Mentor pemilik kelas + Admin/Superadmin**; reschedule/pembatalan mengikuti H-1 PRD.
   3. Notifikasi perubahan jadwal via **email + in-app saja**; kanal lain (WA/push) = Change Request.
+- **Pengesahan pemilik repo untuk Tahap 7 (2026-11-03, mengikat):**
+  1. Syarat terbit sertifikat **Opsi A**: seluruh level 1–5 berstatus `PASSED` pada progres Taruna (untuk cohort yang sama). Tanpa syarat penyelesaian materi tambahan.
+  2. Verifikasi publik/QR tetap **tidak dibangun** (di luar MVP).
 - **Acuan produk:** `docs/prd.md` (PRD ringkas, menggantikan PRD lengkap v1.8)
 - **Acuan teknis:** `docs/architecture.md`, `docs/api-specification.md`, `docs/detail_fase_pekerjaan_SPLI.md`
 - **Scope kerja backend:** hanya folder `backend/` + dokumen API/arsitektur yang memang perlu diperbarui. Jangan ubah `frontend/`.
