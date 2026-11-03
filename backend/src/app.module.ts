@@ -13,6 +13,8 @@ import { UsersModule } from './modules/users/users.module';
 import { CohortsModule } from './modules/cohorts/cohorts.module';
 import { ContentModule } from './modules/content/content.module';
 import { VideosModule } from './modules/videos/videos.module';
+import { LiveLessonsModule } from './modules/live-lessons/live-lessons.module';
+import { ConferenceModule } from './modules/conference/conference.module';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { VideosModule } from './modules/videos/videos.module';
     CohortsModule,
     VideosModule,
     ContentModule,
+    ConferenceModule,
+    LiveLessonsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

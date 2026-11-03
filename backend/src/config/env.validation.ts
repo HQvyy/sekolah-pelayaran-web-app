@@ -40,4 +40,8 @@ export const validationSchema = Joi.object({
   BUNNY_API_KEY: Joi.string().allow('').default(''),
   BUNNY_LIBRARY_ID: Joi.string().allow('').default(''),
   BUNNY_CDN_HOSTNAME: Joi.string().allow('').default(''),
+  // Konferensi Live Lesson (Jitsi default; fake dev/test). Tanpa kredensial
+  // Jitsi publik tetap jalan (ruang publik); JWT self-host menyusul bila perlu.
+  CONFERENCE_USE_FAKE: Joi.boolean().truthy('true').falsy('false').default(true),
+  JITSI_DOMAIN: Joi.string().allow('').default(''),
 });

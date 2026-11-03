@@ -130,3 +130,22 @@ otomatis di production. Jangan menambahkan data dummy ke production.
   backend TIDAK mengklaim pemeriksaan malware tersedia.
 - Thumbnail disimpan sebagai path internal (`thumbnails/...`); file fisik +
   object storage menunggu keputusan infra (bukan klaim produksi).
+
+## Live Lesson Tahap 5 (ringkas)
+
+- Jadwal oleh Mentor pemilik kelas + Admin/Superadmin (keputusan Tahap 5).
+  Reschedule/pembatalan paling lambat H-1 (403 bila lewat); tanpa bypass.
+- Taruna masuk via `POST /live-lessons/:id/join` (login + enrollment + jadwal
+  + status valid); kehadiran PRESENT + peserta tercatat otomatis; materi
+  embed Jitsi (`{ roomName, domain, displayName }`) — bukan URL mentah publik.
+- Provider: Jitsi Meet gratis + embed (keputusan Tahap 5); interface
+  `ConferenceProvider` + fake dev/test (`CONFERENCE_USE_FAKE=true`); Zoom/Meet
+  berbayar menyusul bila PKS mengharuskan.
+- Absensi: koreksi manual mentor beraudit dalam 24 jam setelah sesi berakhir
+  (403 bila lewat); rekap + ekspor `.xlsx`; tutup otomatis 24 jam (PRD §4.3).
+- Notifikasi perubahan/pembatalan: in-app (selalu) + email via adapter
+  (tanpa klaim terkirim bila provider fake). `GET /me/notifications`,
+  `PATCH /me/notifications/:id/read`, `POST /me/notifications/read-all`.
+- Timestamp UTC; aturan tanggal backend konsisten; tampilan WIB di frontend.
+- Postman: `postman/spli-backend-tahap-1-5.postman_collection.json`.
+  Swagger: `/docs` (+ tag live-lessons, notifications).

@@ -2,7 +2,8 @@
 // Tahap 2: fondasi identity & access (auth, 2FA OTP, session/refresh, reset, audit).
 // Tahap 3: users, cohorts, enrollments, import .xlsx Taruna.
 // Tahap 4: konten pembelajaran (kategori kapal → kursus → bab → materi video).
-// Model domain lain (CBT, dsb.) menyusul tahap berikutnya
+// Tahap 5: Live Lesson (jadwal, join, absensi) + notifikasi in-app.
+// Model domain lain (CBT, dst.) menyusul tahap berikutnya
 // mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
 
 generator client {
@@ -164,6 +165,7 @@ model Cohort {
 
   enrollments Enrollment[]
   courses     Course[]
+  liveLessons LiveLesson[]
 
   @@map("cohorts")
 }
@@ -320,4 +322,117 @@ model Video {
 
   @@index([materialId, status])
   @@map("videos")
+}
+
+enum LessonStatus {
+  SCHEDULED
+  ONGOING
+  FINISHED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+// Live Lesson: jadwal milik mentor untuk satu cohort. URL/embed konferensi
+// TIDAK disimpan mentah untuk publik — materi join diterbitkan saat join
+// yang valid (lihat ConferenceProvider).
+model LiveLesson {
+  id            String       @id @default(uuid()) @db.Uuid
+  cohortId      String       @map("cohort_id") @db.Uuid
+  mentorId      String       @map("mentor_id") @db.Uuid
+  title         String
+  description   String?
+  // Timestamp UTC; aturan tanggal dihitung backend zona Asia/Jakarta.
+  startsAt      DateTime     @map("starts_at") @db.Timestamptz(6)
+  endsAt        DateTime     @map("ends_at") @db.Timestamptz(6)
+  status        LessonStatus @default(SCHEDULED)
+  // Referensi ruang konferensi (bukan URL mentah untuk Taruna).
+  roomReference String?      @map("room_reference")
+  createdBy     String       @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cohort       Cohort              @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  participants LessonParticipant[]
+  attendances  AttendanceRecord[]
+  auditLogs    LessonAuditLog[]
+
+  @@index([cohortId, startsAt])
+  @@index([mentorId, startsAt])
+  @@map("live_lessons")
+}
+
+model LessonParticipant {
+  id        String   @id @default(uuid()) @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([userId])
+  @@map("lesson_participants")
+}
+
+model AttendanceRecord {
+  id          String           @id @default(uuid()) @db.Uuid
+  lessonId    String           @map("lesson_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  status      AttendanceStatus @default(PRESENT)
+  // Sumber pencatatan: JOIN (tombol aplikasi) atau MANUAL (koreksi mentor).
+  source      String           @default("JOIN")
+  // Absensi ditutup 24 jam setelah sesi berakhir (PRD §4.3).
+  recordedAt  DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  correctedBy String?          @map("corrected_by") @db.Uuid
+  correctedAt DateTime?        @map("corrected_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([lessonId, status])
+  @@map("attendance_records")
+}
+
+// Audit perubahan jadwal/absensi Live Lesson (di luar audit log umum agar
+// riwayat per lesson mudah ditelusuri).
+model LessonAuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  actorId   String   @map("actor_id") @db.Uuid
+  action    String
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, createdAt])
+  @@map("lesson_audit_logs")
+}
+
+enum NotificationKind {
+  SCHEDULE_CREATED
+  SCHEDULE_CHANGED
+  SCHEDULE_CANCELLED
+  ESSAY_OVERDUE
+  CERTIFICATE_ISSUED
+}
+
+// Notifikasi in-app per pengguna. Email dikirim via adapter untuk event
+// yang sama (bila EMAIL_PROVIDER real); isi email tanpa secret.
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  kind      NotificationKind
+  title     String
+  body      String
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
