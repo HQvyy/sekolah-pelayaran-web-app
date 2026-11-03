@@ -1,6 +1,6 @@
 # Backend Implementation Plan — E-Learning Sekolah Pelaut Indonesia
 
-- **Status:** Draft perencanaan — hasil PROMPT BACKEND 0 + persiapan Tahap 3 (disahkan pemilik repo 2026-11-02; tanpa implementasi fitur domain; non-teknis diparkir)
+- **Status:** Draft perencanaan — hasil PROMPT BACKEND 0 + persiapan Tahap 5 (disahkan pemilik repo 2026-11-02/03; tanpa implementasi fitur domain; non-teknis diparkir)
 - **Pengesahan pemilik repo (2026-11-02, mengikat untuk Tahap 2):**
   1. Envelope respons `data/meta` + error `{ error: { code, message, details, requestId } }` (§6.1 butir 1) dinyatakan **FINAL sebagai kontrak kerja backend**; FE menyesuaikan.
   2. Bentuk respons auth Tahap 2 mengikuti usulan api-spec §15.1: login mengembalikan `{ data: { status: "OTP_REQUIRED", challengeId, expiresAt } }`, **tanpa access token sebelum OTP valid**.
@@ -9,6 +9,10 @@
   1. Template kolom impor `.xlsx` v1 FINAL sebagai kontrak kerja (akun: `nama_lengkap*, email*, nomor_identitas*, cohort_kode*, telepon, tanggal_lahir(YYYY-MM-DD)`; bank soal: `level*(1–5), kategori_kapal*, tipe*(PG|ESAI), pertanyaan*, opsi_a..opsi_d, kunci_jawaban*, bobot*`); perubahan kolom = revisi template berversion.
   2. Verifikasi Taruna oleh **Admin dan Superadmin** (tercatat di audit).
   3. Akun Mentor/Admin/Superadmin hanya dibuat/diubah oleh **Superadmin** (anti-escalation).
+- **Pengesahan pemilik repo untuk Tahap 5 (2026-11-03, mengikat):**
+  1. Provider konferensi: **yang termudah + murah/gratis** (prioritas: Jitsi Meet self-host/gratis → fallback Google Meet/Zoom bila PKS mengharuskan); metode join **embed di aplikasi** (iframe), bukan link eksternal.
+  2. Jadwal dibuat oleh **Mentor pemilik kelas + Admin/Superadmin**; reschedule/pembatalan mengikuti H-1 PRD.
+  3. Notifikasi perubahan jadwal via **email + in-app saja**; kanal lain (WA/push) = Change Request.
 - **Acuan produk:** `docs/prd.md` (PRD ringkas, menggantikan PRD lengkap v1.8)
 - **Acuan teknis:** `docs/architecture.md`, `docs/api-specification.md`, `docs/detail_fase_pekerjaan_SPLI.md`
 - **Scope kerja backend:** hanya folder `backend/` + dokumen API/arsitektur yang memang perlu diperbarui. Jangan ubah `frontend/`.
