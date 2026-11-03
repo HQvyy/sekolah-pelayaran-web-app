@@ -48,8 +48,8 @@ function attemptPayload() {
     startedAt: new Date(Date.now() - 60_000).toISOString(),
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     questions: [
-      { id: "q1", type: "MULTIPLE_CHOICE" as const, prompt: "Ibukota pelayaran?", options: [{ id: "a", label: "Jakarta" }, { id: "b", label: "Surabaya" }] },
-      { id: "q2", type: "ESSAY" as const, prompt: "Jelaskan keselamatan." },
+      { questionId: "q1", type: "MULTIPLE_CHOICE" as const, prompt: "Ibukota pelayaran?", options: [{ id: "a", label: "Jakarta" }, { id: "b", label: "Surabaya" }] },
+      { questionId: "q2", type: "ESSAY" as const, prompt: "Jelaskan keselamatan." },
     ],
   };
 }

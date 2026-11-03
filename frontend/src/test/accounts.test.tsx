@@ -49,7 +49,7 @@ describe("halaman pengguna", () => {
       jsonResponse(
         {
           data: [
-            { id: "1", name: "Taruna Satu", email: "satu@example.com", role: "TARUNA", status: "PENDING_VERIFICATION" },
+            { id: "1", email: "satu@example.com", role: "TARUNA", status: "PENDING_VERIFICATION" },
           ],
           meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 3 },
         },
@@ -60,7 +60,7 @@ describe("halaman pengguna", () => {
     renderWithSession(<UserListPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/taruna satu/i)).toBeInTheDocument();
+      expect(screen.getByText(/satu@example\.com/i)).toBeInTheDocument();
     });
     expect(screen.getAllByText(/halaman 1 dari 3/i).length).toBeGreaterThan(0);
 

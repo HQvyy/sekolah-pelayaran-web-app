@@ -13,6 +13,7 @@ import type { Response } from 'express';
 import { Role } from '@prisma/client';
 import { RatingsService } from './ratings.service';
 import { CertificatesService } from './certificates.service';
+import { ProgressService } from './progress.service';
 import { TicketsService } from './tickets.service';
 import {
   ChangeTicketStatusDto,
@@ -32,6 +33,7 @@ export class ServicesController {
   constructor(
     private readonly ratings: RatingsService,
     private readonly certificates: CertificatesService,
+    private readonly progress: ProgressService,
     private readonly tickets: TicketsService,
   ) {}
 
@@ -76,6 +78,14 @@ export class ServicesController {
     @Query('lessonId') lessonId?: string,
   ) {
     return ok(await this.ratings.classRatings(actor, classId, lessonId));
+  }
+
+  @Get('me/progress')
+  @Roles(Role.TARUNA)
+  @ApiTags('progress')
+  @ApiOperation({ summary: 'Progres agregat Taruna (untuk dasbor FE)' })
+  async myProgress(@CurrentUser() user: RequestUser) {
+    return ok(await this.progress.myProgress(user.id));
   }
 
   @Get('me/certificates')

@@ -7,10 +7,9 @@ import type {
 export type AuthChallengeStatus = "OTP_REQUIRED";
 
 export interface AuthRegisterPayload {
-  name: string;
   email: string;
   password: string;
-  dataProcessingConsent: boolean;
+  consent: boolean;
 }
 
 export interface AuthLoginPayload {
@@ -29,10 +28,9 @@ export interface AuthVerifyOtpPayload {
   code: string;
 }
 
-export interface AuthTokens {
+export interface AuthVerifyOtpResponse {
   accessToken: string;
-  tokenType: "Bearer";
-  expiresIn: number;
+  user: Pick<SessionUser, "id" | "email" | "role"> & { status: string };
 }
 
 export interface AuthResendOtpPayload {
@@ -51,7 +49,7 @@ export interface AuthForgotPasswordPayload {
 
 export interface AuthResetPasswordPayload {
   token: string;
-  password: string;
+  newPassword: string;
 }
 
 export interface AuthMeResponse {
@@ -64,7 +62,7 @@ export interface AuthRoleResponse {
 
 export type AuthRegisterResult = ApiSuccess<Pick<SessionUser, "id" | "email">>;
 export type AuthLoginResult = ApiSuccess<AuthLoginResponse>;
-export type AuthVerifyOtpResult = ApiSuccess<AuthTokens>;
+export type AuthVerifyOtpResult = ApiSuccess<AuthVerifyOtpResponse>;
 export type AuthResendOtpResult = ApiSuccess<AuthResendOtpResponse>;
 export type AuthMeResult = ApiSuccess<AuthMeResponse>;
 

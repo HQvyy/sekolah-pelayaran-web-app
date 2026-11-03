@@ -11,7 +11,7 @@ import {
   removeEnrollment,
   updateCohort,
 } from "./accountService.ts";
-import type { Cohort, CohortPayload, CohortQuery, CohortStatus, Enrollment } from "./accountTypes.ts";
+import type { Cohort, CohortPayload, CohortQuery, Enrollment } from "./accountTypes.ts";
 import { fieldErrors, useAccessToken, usePaginatedList } from "./useAccountList.ts";
 import { useSession } from "../../app/useSession.ts";
 import {
@@ -30,8 +30,8 @@ import {
 
 const PAGE_SIZE = 20;
 
-function cohortStatusLabel(status: CohortStatus): string {
-  return status === "ACTIVE" ? "Aktif" : "Nonaktif";
+function cohortStatusLabel(isActive: boolean): string {
+  return isActive ? "Aktif" : "Nonaktif";
 }
 
 export function CohortListPage() {
@@ -45,11 +45,18 @@ export function CohortListPage() {
   const loader = useMemo(() => {
     return async (page: number) => {
       if (!accessToken) throw new ApiError(401, "UNAUTHENTICATED", "Sesi berakhir.");
-      const result = await listCohorts({ ...applied, page, pageSize: PAGE_SIZE }, accessToken);
+      const result = await listCohorts({ page, pageSize: PAGE_SIZE }, accessToken);
+      const keyword = applied.search?.toLowerCase() ?? "";
+      const filtered = result.data.filter((item) => {
+        if (keyword && !`${item.code} ${item.name}`.toLowerCase().includes(keyword)) return false;
+        if (applied.status === "ACTIVE" && !item.isActive) return false;
+        if (applied.status === "INACTIVE" && item.isActive) return false;
+        return true;
+      });
       return {
-        items: result.data,
-        totalItems: result.meta?.totalItems ?? result.data.length,
-        totalPages: result.meta?.totalPages ?? 1,
+        items: filtered,
+        totalItems: filtered.length,
+        totalPages: 1,
       };
     };
   }, [accessToken, applied]);
@@ -139,8 +146,8 @@ export function CohortListPage() {
                   <tr key={item.id}>
                     <td>{item.name}</td>
                     <td>
-                      <Badge tone={item.status === "ACTIVE" ? "done" : "neutral"}>
-                        {cohortStatusLabel(item.status)}
+                      <Badge tone={item.isActive ? "done" : "neutral"}>
+                        {cohortStatusLabel(item.isActive)}
                       </Badge>
                     </td>
                     <td>
@@ -226,7 +233,7 @@ export function CohortFormPage({ cohortId }: { cohortId?: string }) {
   const accessToken = useAccessToken();
   const { user } = useSession();
   const isEdit = Boolean(cohortId);
-  const [form, setForm] = useState<CohortPayload>({ name: "", description: "", status: "ACTIVE" });
+  const [form, setForm] = useState<CohortPayload>({ code: "", name: "", description: "", isActive: true });
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState("");
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
@@ -246,7 +253,7 @@ export function CohortFormPage({ cohortId }: { cohortId?: string }) {
       setLoadError("");
       try {
         const result = await getCohort(cohortId, accessToken);
-        setForm({ name: result.data.name, description: result.data.description ?? "", status: result.data.status });
+        setForm({ code: result.data.code, name: result.data.name, description: result.data.description ?? "", isActive: result.data.isActive });
       } catch (requestError) {
         setLoadError(requestError instanceof ApiError ? requestError.message : "Gagal memuat Angkatan.");
       } finally {
@@ -314,6 +321,19 @@ export function CohortFormPage({ cohortId }: { cohortId?: string }) {
         <h1>{isEdit ? "Ubah Angkatan" : "Tambah Angkatan"}</h1>
         <form className="form" onSubmit={handleSubmit} aria-label="Formulir Angkatan">
           <div className="form-field">
+            <label htmlFor="cohort-code">Kode Angkatan</label>
+            <input
+              id="cohort-code"
+              value={form.code}
+              disabled={!canManage || isEdit}
+              onChange={(event) => setForm((value) => ({ ...value, code: event.target.value }))}
+              aria-invalid={fieldErrorMap.code ? "true" : undefined}
+              aria-describedby={fieldErrorMap.code ? "cohort-code-error" : undefined}
+              placeholder="Contoh: A2026A"
+            />
+            <FieldError id="cohort-code-error" message={fieldErrorMap.code} />
+          </div>
+          <div className="form-field">
             <label htmlFor="cohort-name">Nama Angkatan atau Kelas</label>
             <input
               id="cohort-name"
@@ -338,16 +358,16 @@ export function CohortFormPage({ cohortId }: { cohortId?: string }) {
             />
           </div>
           <div className="form-field">
-            <label htmlFor="cohort-status">Status</label>
-            <select
-              id="cohort-status"
-              value={form.status}
-              disabled={!canManage}
-              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as CohortStatus }))}
-            >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
-            </select>
+            <label htmlFor="cohort-is-active">
+              <input
+                id="cohort-is-active"
+                type="checkbox"
+                checked={form.isActive ?? true}
+                disabled={!canManage}
+                onChange={(event) => setForm((value) => ({ ...value, isActive: event.target.checked }))}
+              />{" "}
+              Angkatan aktif
+            </label>
           </div>
           {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}
           {saved ? <div className="alert alert-success" role="status">Angkatan tersimpan.</div> : null}
@@ -465,8 +485,8 @@ export function CohortDetailPage({ cohortId }: { cohortId: string }) {
         <h1>{cohort.name}</h1>
         <p className="muted">{cohort.description || "Belum ada deskripsi Angkatan."}</p>
         <p>
-          <Badge tone={cohort.status === "ACTIVE" ? "done" : "neutral"}>
-            {cohortStatusLabel(cohort.status)}
+          <Badge tone={cohort.isActive ? "done" : "neutral"}>
+            {cohortStatusLabel(cohort.isActive)}
           </Badge>
         </p>
         <div className="button-row">
@@ -488,8 +508,7 @@ export function CohortDetailPage({ cohortId }: { cohortId: string }) {
                   <caption>Daftar Taruna dalam Angkatan ini.</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Nama</th>
-                      <th scope="col">Email</th>
+                      <th scope="col">Email Taruna</th>
                       <th scope="col">Status</th>
                       <th scope="col">Aksi</th>
                     </tr>
@@ -497,8 +516,7 @@ export function CohortDetailPage({ cohortId }: { cohortId: string }) {
                   <tbody>
                     {enrollments.map((item) => (
                       <tr key={item.id}>
-                        <td>{item.userName}</td>
-                        <td>{item.userEmail}</td>
+                        <td>{item.user?.email ?? item.userEmail}</td>
                         <td>{item.status === "ACTIVE" ? "Aktif" : "Nonaktif"}</td>
                         <td>
                           {canManage ? (
@@ -597,7 +615,7 @@ export function MyEnrollmentPage() {
           <ul>
             {items.map((item) => (
               <li key={item.id}>
-                {item.cohortId} dengan status {item.status === "ACTIVE" ? "aktif" : "nonaktif"}.
+                {item.cohort?.name ?? item.cohortId} (kode: {item.cohort?.code ?? "-"})
               </li>
             ))}
           </ul>

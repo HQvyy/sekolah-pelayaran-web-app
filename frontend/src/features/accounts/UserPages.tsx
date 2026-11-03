@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useUserDetail } from "./useUserDetail.ts";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../services/apiClient.ts";
-import { listUsers, updateUser, verifyTaruna } from "./accountService.ts";
+import { listUsers, updateUserRole, updateUserStatus, verifyTaruna } from "./accountService.ts";
 import type { AccountStatus, AdminUser, UserQuery } from "./accountTypes.ts";
+import type { UserRole } from "../../types/api.ts";
 import { fieldErrors, useAccessToken, usePaginatedList } from "./useAccountList.ts";
 import { useSession } from "../../app/useSession.ts";
 import {
@@ -15,7 +16,7 @@ import {
   EmptyState,
   ErrorAlert,
   ErrorState,
-  FieldError,
+
   InfoAlert,
   LoadingState,
 } from "../../components/ui.tsx";
@@ -166,7 +167,6 @@ export function UserListPage() {
               </caption>
               <thead>
                 <tr>
-                  <th scope="col">Nama</th>
                   <th scope="col">Email</th>
                   <th scope="col">Peran</th>
                   <th scope="col">Status</th>
@@ -176,7 +176,6 @@ export function UserListPage() {
               <tbody>
                 {list.items.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.name}</td>
                     <td>{item.email}</td>
                     <td>{item.role}</td>
                     <td>
@@ -274,7 +273,8 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const accessToken = useAccessToken();
   const { user } = useSession();
   const { detail, loading, error, forbidden, reload } = useUserDetail(userId);
-  const [form, setForm] = useState({ name: "", status: "ACTIVE" as AccountStatus });
+  const [status, setStatus] = useState<AccountStatus>("ACTIVE");
+  const [role, setRole] = useState<UserRole>("TARUNA");
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -282,7 +282,10 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const canEdit = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
 
   useEffect(() => {
-    if (detail) setForm({ name: detail.name, status: detail.status });
+    if (detail) {
+      setStatus(detail.status);
+      setRole(detail.role);
+    }
   }, [detail]);
 
   async function handleSave(event: React.FormEvent) {
@@ -297,7 +300,14 @@ export function UserDetailPage({ userId }: { userId: string }) {
     setFieldErrorMap({});
     setSaved(false);
     try {
-      await updateUser(detail.id, { name: form.name, status: form.status }, accessToken);
+      const statusChanged = status !== detail.status;
+      const roleChanged = role !== detail.role;
+      if (!statusChanged && !roleChanged) {
+        setSaved(true);
+        return;
+      }
+      if (statusChanged) await updateUserStatus(detail.id, status, accessToken);
+      if (roleChanged) await updateUserRole(detail.id, role, accessToken);
       setSaved(true);
       reload();
     } catch (requestError) {
@@ -343,7 +353,7 @@ export function UserDetailPage({ userId }: { userId: string }) {
       <Card>
         <h1>Detail Pengguna</h1>
         <p className="muted">
-          {detail.name} ({detail.email}) dengan peran {detail.role}.
+          {detail.email} dengan peran {detail.role}.
         </p>
         <p>
           <Badge tone={statusTone(detail.status)}>{statusLabel(detail.status)}</Badge>
@@ -358,31 +368,36 @@ export function UserDetailPage({ userId }: { userId: string }) {
         ) : null}
         <form className="form" onSubmit={handleSave} aria-label="Formulir ubah pengguna">
           <div className="form-field">
-            <label htmlFor="user-detail-name">Nama lengkap</label>
-            <input
-              id="user-detail-name"
-              value={form.name}
-              disabled={!canEdit}
-              onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
-              aria-invalid={fieldErrorMap.name ? "true" : undefined}
-              aria-describedby={fieldErrorMap.name ? "user-detail-name-error" : undefined}
-            />
-            <FieldError id="user-detail-name-error" message={fieldErrorMap.name} />
-          </div>
-          <div className="form-field">
             <label htmlFor="user-detail-status">Status akun</label>
             <select
               id="user-detail-status"
-              value={form.status}
+              value={status}
               disabled={!canEdit}
-              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as AccountStatus }))}
+              onChange={(event) => setStatus(event.target.value as AccountStatus)}
             >
               <option value="PENDING_VERIFICATION">Menunggu verifikasi</option>
               <option value="ACTIVE">Aktif</option>
               <option value="SUSPENDED">Ditangguhkan</option>
             </select>
           </div>
+          <div className="form-field">
+            <label htmlFor="user-detail-role">Peran</label>
+            <select
+              id="user-detail-role"
+              value={role}
+              disabled={!canEdit}
+              onChange={(event) => setRole(event.target.value as UserRole)}
+            >
+              <option value="TARUNA">Taruna</option>
+              <option value="MENTOR">Mentor</option>
+              <option value="ADMIN">Admin</option>
+              <option value="SUPERADMIN">Superadmin</option>
+            </select>
+          </div>
           {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}
+          {Object.values(fieldErrorMap).map((message) => (
+            <ErrorAlert key={message}>{message}</ErrorAlert>
+          ))}
           {saved ? <div className="alert alert-success" role="status">Perubahan tersimpan.</div> : null}
           <div className="button-row">
             <Button type="submit" variant="primary" disabled={saving || !canEdit}>

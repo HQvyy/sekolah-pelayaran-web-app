@@ -24,6 +24,7 @@ export function RatingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [score, setScore] = useState("5");
+  const [lessonId, setLessonId] = useState("");
   const [feedback, setFeedback] = useState("");
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -68,14 +69,19 @@ export function RatingPage() {
     setFieldErrorMap({});
     setFormError("");
     setSavedMessage("");
+    if (!lessonId.trim()) {
+      setFieldErrorMap({ lessonId: "ID kelas (Live Lesson) wajib diisi." });
+      return;
+    }
     if (!Number.isInteger(numericScore) || numericScore < 1 || numericScore > 5) {
       setFieldErrorMap({ score: "Rating harus bilangan bulat 1 sampai 5." });
       return;
     }
     setSaving(true);
     try {
-      await createRating({ score: numericScore, feedback: feedback || undefined }, accessToken);
+      await createRating({ lessonId: lessonId.trim(), score: numericScore, feedback: feedback || undefined }, accessToken);
       setScore("5");
+      setLessonId("");
       setFeedback("");
       setSavedMessage("Rating tersimpan sesuai respons server.");
       await load();
@@ -140,6 +146,19 @@ export function RatingPage() {
           rating pertama. Status dan batas waktu mengikuti respons server.
         </p>
         <form className="form" onSubmit={handleCreate} aria-label="Formulir rating">
+          <div className="form-field">
+            <label htmlFor="rating-lesson">ID kelas (Live Lesson)</label>
+            <input
+              id="rating-lesson"
+              value={lessonId}
+              disabled={!isTaruna}
+              onChange={(event) => setLessonId(event.target.value)}
+              aria-invalid={fieldErrorMap.lessonId ? "true" : undefined}
+              aria-describedby={fieldErrorMap.lessonId ? "rating-lesson-error" : undefined}
+              placeholder="Contoh: uuid-live-lesson"
+            />
+            <FieldError id="rating-lesson-error" message={fieldErrorMap.lessonId} />
+          </div>
           <div className="form-field">
             <label htmlFor="rating-score">Nilai 1 sampai 5</label>
             <select

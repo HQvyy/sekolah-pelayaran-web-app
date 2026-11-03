@@ -34,11 +34,14 @@ export interface ChoiceOption {
 }
 
 export interface AttemptQuestion {
-  id: string;
-  type: QuestionType;
-  prompt: string;
+  questionId: string;
+  type?: QuestionType;
+  prompt?: string;
   options?: ChoiceOption[];
+  selectedOptionId?: string | null;
+  essayText?: string | null;
   savedAnswer?: string | string[];
+  updatedAt?: string | null;
 }
 
 export interface Attempt {
@@ -78,7 +81,8 @@ export interface EssayGradePayload {
 }
 
 export interface SaveAnswerPayload {
-  answer: string | string[];
+  optionId?: string;
+  essayText?: string;
 }
 
 export type AssessmentListResult = ApiSuccess<Assessment[]>;

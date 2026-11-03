@@ -80,7 +80,8 @@ export function AttemptPage({ attemptId }: { attemptId: string }) {
     setAttempt(data);
     const initial: Record<string, string | string[]> = {};
     for (const question of data.questions) {
-      if (question.savedAnswer !== undefined) initial[question.id] = question.savedAnswer;
+      const saved = question.savedAnswer ?? question.selectedOptionId ?? question.essayText ?? undefined;
+      if (saved !== undefined && saved !== null) initial[question.questionId] = saved;
     }
     setAnswers(initial);
     setRemaining(remainingSeconds(data.serverNow, data.expiresAt));
@@ -94,7 +95,12 @@ export function AttemptPage({ attemptId }: { attemptId: string }) {
     setSaveError("");
     for (const [questionId, pending] of entries) {
       try {
-        await saveAnswer(attemptId, questionId, { answer: pending.value }, accessToken, pending.idempotencyKey);
+        const question = attempt.questions.find((item) => item.questionId === questionId);
+        const payload =
+          question?.type === "ESSAY"
+            ? { essayText: String(pending.value) }
+            : { optionId: String(pending.value) };
+        await saveAnswer(attemptId, questionId, payload, accessToken, pending.idempotencyKey);
         delete pendingRef.current[questionId];
       } catch (requestError) {
         setAutosave("ERROR");
@@ -144,7 +150,7 @@ export function AttemptPage({ attemptId }: { attemptId: string }) {
   const progress = useMemo(() => {
     if (!attempt) return { answered: 0, total: 0 };
     const answered = attempt.questions.filter((question) => {
-      const value = answers[question.id];
+      const value = answers[question.questionId];
       if (Array.isArray(value)) return value.length > 0;
       return Boolean(value && String(value).trim());
     }).length;
@@ -227,11 +233,11 @@ export function AttemptPage({ attemptId }: { attemptId: string }) {
         <h2>Navigasi Soal</h2>
         <div className="button-row">
           {attempt.questions.map((question, index) => {
-            const value = answers[question.id];
+            const value = answers[question.questionId];
             const answered = Array.isArray(value) ? value.length > 0 : Boolean(value && String(value).trim());
             return (
               <Button
-                key={question.id}
+                key={question.questionId}
                 variant={index === activeQuestion ? "primary" : "secondary"}
                 onClick={() => setActiveQuestion(index)}
                 aria-label={`Soal ${index + 1}${answered ? " sudah dijawab" : ""}`}
@@ -247,9 +253,9 @@ export function AttemptPage({ attemptId }: { attemptId: string }) {
         <QuestionView
           question={current}
           index={activeQuestion}
-          value={answers[current.id]}
+          value={answers[current.questionId]}
           disabled={blocked}
-          onChange={(value) => queueAnswer(current.id, value)}
+          onChange={(value) => queueAnswer(current.questionId, value)}
         />
         <div className="button-row">
           <Button
@@ -306,10 +312,10 @@ function QuestionView({
   if (question.type === "ESSAY") {
     return (
       <div className="form-field">
-        <label htmlFor={`essay-${question.id}`}>Soal {index + 1} esai</label>
+        <label htmlFor={`essay-${question.questionId}`}>Soal {index + 1} esai</label>
         <p className="muted">{question.prompt}</p>
         <textarea
-          id={`essay-${question.id}`}
+          id={`essay-${question.questionId}`}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
@@ -328,7 +334,7 @@ function QuestionView({
         <label key={option.id} className="field-help">
           <input
             type="radio"
-            name={`question-${question.id}`}
+            name={`question-${question.questionId}`}
             value={option.id}
             checked={value === option.id}
             disabled={disabled}

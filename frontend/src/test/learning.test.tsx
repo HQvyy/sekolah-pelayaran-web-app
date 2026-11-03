@@ -48,7 +48,7 @@ describe("navigasi pembelajaran", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(
           {
-            data: [{ id: "cat-1", name: "Tanker", description: "Kapal tanker", status: "ACTIVE", createdAt: "2026-01-01T00:00:00Z" }],
+            data: [{ id: "cat-1", name: "Tanker", description: "Kapal tanker", status: "PUBLISHED", createdAt: "2026-01-01T00:00:00Z" }],
             meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
           },
           200,
@@ -91,7 +91,7 @@ describe("navigasi pembelajaran", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(
           {
-            data: [{ id: "cat-1", name: "Tanker", status: "ACTIVE", createdAt: "2026-01-01T00:00:00Z" }],
+            data: [{ id: "cat-1", name: "Tanker", status: "PUBLISHED", createdAt: "2026-01-01T00:00:00Z" }],
             meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
           },
           200,
@@ -142,11 +142,8 @@ describe("materi dan playback", () => {
                 id: "mat-1",
                 chapterId: "ch-1",
                 title: "Materi Tanker 1",
-                type: "VIDEO",
-                status: "ACTIVE",
-                isLocked: false,
-                isCompleted: false,
-                videoId: "vid-1",
+                status: "PUBLISHED",
+                videos: [{ id: "vid-1", title: "Video 1", status: "READY" }],
                 createdAt: "2026-01-01T00:00:00Z",
               },
             },
@@ -189,10 +186,8 @@ describe("materi dan playback", () => {
                 id: "mat-1",
                 chapterId: "ch-1",
                 title: "Materi Tanker 1",
-                type: "VIDEO",
-                status: "ACTIVE",
-                isLocked: false,
-                isCompleted: true,
+                status: "PUBLISHED",
+                videos: [],
                 createdAt: "2026-01-01T00:00:00Z",
               },
             },

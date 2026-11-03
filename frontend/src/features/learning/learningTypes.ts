@@ -1,6 +1,6 @@
 import type { ApiSuccess } from "../../types/api.ts";
 
-export type ContentStatus = "ACTIVE" | "INACTIVE";
+export type ContentStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 export type MaterialType = "VIDEO" | "DOKUMEN" | "TAUTAN";
 export type VideoStatus = "READY" | "PROCESSING" | "FAILED";
 export type PlaybackStatus = "READY" | "EXPIRED" | "UNAVAILABLE" | "FORBIDDEN";
@@ -30,18 +30,28 @@ export interface Chapter {
   status: ContentStatus;
 }
 
+export interface LearningMaterialVideo {
+  id: string;
+  title: string;
+  status: string;
+  durationSeconds?: number | null;
+}
+
 export interface LearningMaterial {
   id: string;
   chapterId: string;
   title: string;
-  type: MaterialType;
   description?: string;
-  thumbnailUrl?: string;
-  videoId?: string;
   status: ContentStatus;
-  isLocked: boolean;
-  isCompleted: boolean;
+  sortOrder?: number;
+  thumbnailPath?: string | null;
   createdAt: string;
+  videos?: LearningMaterialVideo[];
+  // Field turunan tampilan (bukan dari backend langsung).
+  type?: MaterialType;
+  videoId?: string;
+  isLocked?: boolean;
+  isCompleted?: boolean;
 }
 
 export interface VideoMetadata {
@@ -80,6 +90,15 @@ export interface CategoryPayload {
 
 export interface CoursePayload {
   categoryId: string;
+  cohortId?: string;
+  title: string;
+  description?: string;
+  status: ContentStatus;
+}
+
+export interface CourseCreatePayload {
+  categoryId: string;
+  cohortId: string;
   title: string;
   description?: string;
   status: ContentStatus;
@@ -93,10 +112,12 @@ export interface ChapterPayload {
 
 export interface MaterialPayload {
   title: string;
-  type: MaterialType;
   description?: string;
-  videoId?: string;
   status: ContentStatus;
+  sortOrder?: number;
+  // Hanya untuk form FE (type/videoId dikelola via endpoint videos terpisah).
+  type?: MaterialType;
+  videoId?: string;
 }
 
 export interface VideoPayload {

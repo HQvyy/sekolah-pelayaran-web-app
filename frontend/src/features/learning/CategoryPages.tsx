@@ -76,8 +76,8 @@ export function CategoryListPage() {
               <label htmlFor="category-status">Status</label>
               <select id="category-status" value={status} onChange={(event) => setStatus(event.target.value)}>
                 <option value="">Semua status</option>
-                <option value="ACTIVE">Aktif</option>
-                <option value="INACTIVE">Nonaktif</option>
+                <option value="PUBLISHED">Terbit</option>
+                <option value="DRAFT">Draf</option>
               </select>
             </div>
           </div>
@@ -112,8 +112,8 @@ export function CategoryListPage() {
               <h2>{item.name}</h2>
               <p className="muted">{item.description || "Belum ada deskripsi kategori."}</p>
               <p>
-                <Badge tone={item.status === "ACTIVE" ? "done" : "neutral"}>
-                  {item.status === "ACTIVE" ? "Aktif" : "Nonaktif"}
+                <Badge tone={item.status === "PUBLISHED" ? "done" : "neutral"}>
+                  {item.status === "PUBLISHED" ? "Terbit" : "Draf"}
                 </Badge>
               </p>
               <div className="button-row">
@@ -196,5 +196,5 @@ function DeleteCategoryButton({ categoryId, onDone }: { categoryId: string; onDo
 }
 
 export function categoryStatusLabel(status: ContentStatus): string {
-  return status === "ACTIVE" ? "Aktif" : "Nonaktif";
+  return status === "PUBLISHED" ? "Terbit" : "Draf";
 }

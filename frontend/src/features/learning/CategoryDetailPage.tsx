@@ -111,8 +111,8 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
               <h2>{item.title}</h2>
               <p className="muted">{item.description || "Belum ada deskripsi kursus."}</p>
               <p>
-                <Badge tone={item.status === "ACTIVE" ? "done" : "neutral"}>
-                  {item.status === "ACTIVE" ? "Aktif" : "Nonaktif"}
+                <Badge tone={item.status === "PUBLISHED" ? "done" : "neutral"}>
+                  {item.status === "PUBLISHED" ? "Terbit" : "Draf"}
                 </Badge>
               </p>
               <div className="button-row">

@@ -4,6 +4,7 @@ import type {
   MyCertificateListResult,
   MyProgressResult,
   MyRatingListResult,
+  RatingEditPayload,
   RatingPayload,
   RatingResult,
   TicketDetailResult,
@@ -50,7 +51,7 @@ export function createRating(payload: RatingPayload, accessToken: string): Promi
   });
 }
 
-export function updateRating(ratingId: string, payload: RatingPayload, accessToken: string): Promise<RatingResult> {
+export function updateRating(ratingId: string, payload: RatingEditPayload, accessToken: string): Promise<RatingResult> {
   assertRatingScore(payload.score);
   return apiRequest<RatingResult>(`/ratings/${ratingId}`, {
     method: "PATCH",

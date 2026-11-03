@@ -11,7 +11,7 @@ import {
   requestPlaybackToken,
   updateMaterial,
 } from "./learningService.ts";
-import type { LearningMaterial, MaterialPayload, MaterialType } from "./learningTypes.ts";
+import type { LearningMaterial, MaterialPayload } from "./learningTypes.ts";
 import { fieldErrors } from "../accounts/useAccountList.ts";
 import { canPlay, playbackMessage } from "./playbackUtils.ts";
 import { validateThumbnailFile } from "./learningValidation.ts";
@@ -110,15 +110,12 @@ export function ChapterDetailPage({ chapterId }: { chapterId: string }) {
               <h2>{material.title}</h2>
               <p className="muted">{material.description || "Belum ada deskripsi materi."}</p>
               <p>
-                <Badge tone={material.isLocked ? "neutral" : "open"}>{material.isLocked ? "Terkunci" : material.type}</Badge>{" "}
-                {material.isCompleted ? <Badge tone="done">Selesai</Badge> : null}
+                <Badge tone={material.status === "PUBLISHED" ? "done" : "neutral"}>
+                  {material.status === "PUBLISHED" ? "Terbit" : material.status === "DRAFT" ? "Draf" : "Arsip"}
+                </Badge>
               </p>
               <div className="button-row">
-                {material.isLocked ? (
-                  <span className="field-help">Selesaikan materi sebelumnya sesuai aturan backend.</span>
-                ) : (
-                  <ButtonLink to={`/belajar/materi/${material.id}`}>Buka materi</ButtonLink>
-                )}
+                <ButtonLink to={`/belajar/materi/${material.id}`}>Buka materi</ButtonLink>
               </div>
             </Card>
           ))}
@@ -133,10 +130,8 @@ function MaterialForm({ chapterId, onSaved }: { chapterId: string; onSaved: () =
   const accessToken = useAccessToken();
   const [form, setForm] = useState<MaterialPayload>({
     title: "",
-    type: "VIDEO",
     description: "",
-    videoId: "",
-    status: "ACTIVE",
+    status: "PUBLISHED",
   });
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [thumbnailError, setThumbnailError] = useState("");
@@ -161,7 +156,6 @@ function MaterialForm({ chapterId, onSaved }: { chapterId: string; onSaved: () =
     }
     const nextErrors: Record<string, string> = {};
     if (!form.title.trim()) nextErrors.title = "Judul materi wajib diisi.";
-    if (form.type === "VIDEO" && !form.videoId?.trim()) nextErrors.videoId = "ID video wajib diisi untuk materi video.";
     setFieldErrorMap(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     if (thumbnailError) {
@@ -172,8 +166,9 @@ function MaterialForm({ chapterId, onSaved }: { chapterId: string; onSaved: () =
     setFormError("");
     setSaved(false);
     try {
-      await createMaterial(chapterId, { ...form, title: form.title.trim() }, accessToken);
-      setForm({ title: "", type: "VIDEO", description: "", videoId: "", status: "ACTIVE" });
+      const { type: _type, videoId: _videoId, ...payload } = { ...form, title: form.title.trim() };
+      await createMaterial(chapterId, payload, accessToken);
+      setForm({ title: "", description: "", status: "PUBLISHED" });
       setThumbnail(null);
       setSaved(true);
       onSaved();
@@ -205,43 +200,17 @@ function MaterialForm({ chapterId, onSaved }: { chapterId: string; onSaved: () =
           />
           <FieldError id="material-title-error" message={fieldErrorMap.title} />
         </div>
-        <div className="grid-two">
-          <div className="form-field">
-            <label htmlFor="material-type">Jenis materi</label>
-            <select
-              id="material-type"
-              value={form.type}
-              onChange={(event) => setForm((value) => ({ ...value, type: event.target.value as MaterialType }))}
-            >
-              <option value="VIDEO">Video</option>
-              <option value="DOKUMEN">Dokumen</option>
-              <option value="TAUTAN">Tautan</option>
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="material-status">Status</label>
-            <select
-              id="material-status"
-              value={form.status}
-              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as LearningMaterial["status"] }))}
-            >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
-            </select>
-          </div>
-        </div>
         <div className="form-field">
-          <label htmlFor="material-video">ID video backend</label>
-          <input
-            id="material-video"
-            value={form.videoId ?? ""}
-            onChange={(event) => setForm((value) => ({ ...value, videoId: event.target.value }))}
-            aria-invalid={fieldErrorMap.videoId ? "true" : undefined}
-            aria-describedby={fieldErrorMap.videoId ? "material-video-error" : undefined}
-            placeholder="Contoh: uuid-video-backend"
-          />
-          <FieldError id="material-video-error" message={fieldErrorMap.videoId} />
-          <span className="field-help">Metadata dan video dikelola backend, frontend tidak memakai secret provider.</span>
+          <label htmlFor="material-status">Status</label>
+          <select
+            id="material-status"
+            value={form.status}
+            onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as LearningMaterial["status"] }))}
+          >
+            <option value="PUBLISHED">Terbit</option>
+            <option value="DRAFT">Draf</option>
+            <option value="ARCHIVED">Arsip</option>
+          </select>
         </div>
         <div className="form-field">
           <label htmlFor="material-thumbnail">Thumbnail JPG atau PNG maksimal 2 MB</label>
@@ -310,8 +279,9 @@ export function MaterialDetailPage({ materialId }: { materialId: string }) {
     try {
       const result = await getMaterial(materialId, accessToken);
       setMaterial(result.data);
-      if (result.data.videoId) {
-        await loadPlayback(result.data.videoId, accessToken);
+      const firstVideo = result.data.videos?.[0];
+      if (firstVideo) {
+        await loadPlayback(firstVideo.id, accessToken);
       }
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 403) {
@@ -355,7 +325,13 @@ export function MaterialDetailPage({ materialId }: { materialId: string }) {
       setCompleteMessage("Permintaan penyelesaian dikirim. Status resmi menunggu respons backend.");
       await load();
     } catch (requestError) {
-      setCompleteMessage(requestError instanceof ApiError ? requestError.message : "Gagal mencatat penyelesaian.");
+      if (requestError instanceof ApiError && requestError.status === 501) {
+        setCompleteMessage(
+          "Penandaan selesai materi belum tersedia di server (butuh migrasi tabel penyelesaian). Progres materi resmi menyusul.",
+        );
+      } else {
+        setCompleteMessage(requestError instanceof ApiError ? requestError.message : "Gagal mencatat penyelesaian.");
+      }
     }
   }
 
@@ -383,16 +359,16 @@ export function MaterialDetailPage({ materialId }: { materialId: string }) {
         <h1>{material.title}</h1>
         <p className="muted">{material.description || "Belum ada deskripsi materi."}</p>
         <p>
-          <Badge tone={material.isCompleted ? "done" : "open"}>{material.isCompleted ? "Selesai" : material.type}</Badge>
+          <Badge tone={material.status === "PUBLISHED" ? "done" : "neutral"}>
+            {material.status === "PUBLISHED" ? "Terbit" : material.status === "DRAFT" ? "Draf" : "Arsip"}
+          </Badge>
         </p>
         <div className="button-row">
           <ButtonLink to="/belajar">Kembali</ButtonLink>
           {canManage ? <ButtonLink to={`/konten/materi/${material.id}/ubah`}>Ubah materi</ButtonLink> : null}
-          {!material.isCompleted ? (
-            <Button variant="secondary" onClick={() => void handleComplete()}>
-              Tandai selesai
-            </Button>
-          ) : null}
+          <Button variant="secondary" onClick={() => void handleComplete()}>
+            Tandai selesai
+          </Button>
         </div>
         {completeMessage ? (
           <div className="alert alert-info" role="status">
@@ -412,7 +388,7 @@ export function MaterialDetailPage({ materialId }: { materialId: string }) {
           </>
         ) : playback ? (
           <ErrorState title="Video tidak tersedia" description={playbackMessage(playback.status)} onRetry={() => void load()} />
-        ) : material.videoId ? (
+        ) : (material.videos?.length ?? 0) > 0 ? (
           <EmptyState title="Menunggu akses video" description="Backend belum memberikan token playback." />
         ) : (
           <EmptyState title="Materi tanpa video" description="Materi ini tidak memiliki video terkait." />
@@ -444,10 +420,8 @@ export function MaterialEditPage({ materialId }: { materialId: string }) {
   const { user } = useSession();
   const [form, setForm] = useState<MaterialPayload>({
     title: "",
-    type: "VIDEO",
     description: "",
-    videoId: "",
-    status: "ACTIVE",
+    status: "PUBLISHED",
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -469,9 +443,7 @@ export function MaterialEditPage({ materialId }: { materialId: string }) {
         const result = await getMaterial(materialId, accessToken);
         setForm({
           title: result.data.title,
-          type: result.data.type,
           description: result.data.description ?? "",
-          videoId: result.data.videoId ?? "",
           status: result.data.status,
         });
       } catch (requestError) {
@@ -574,6 +546,19 @@ export function MaterialEditPage({ materialId }: { materialId: string }) {
               onChange={(event) => setForm((value) => ({ ...value, description: event.target.value }))}
               rows={3}
             />
+          </div>
+          <div className="form-field">
+            <label htmlFor="edit-material-status">Status</label>
+            <select
+              id="edit-material-status"
+              value={form.status}
+              disabled={!canManage}
+              onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as MaterialPayload["status"] }))}
+            >
+              <option value="PUBLISHED">Terbit</option>
+              <option value="DRAFT">Draf</option>
+              <option value="ARCHIVED">Arsip</option>
+            </select>
           </div>
           {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}
           {saved ? <div className="alert alert-success" role="status">Materi tersimpan.</div> : null}

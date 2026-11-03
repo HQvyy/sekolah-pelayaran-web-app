@@ -1,25 +1,53 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SessionUser } from "../types/api.ts";
 import { fetchMe } from "../features/auth/authService.ts";
-import { ApiError } from "../services/apiClient.ts";
+import { ApiError, registerSessionHooks } from "../services/apiClient.ts";
 import type { SessionState } from "./session.ts";
+
+const TOKEN_STORAGE_KEY = "spli.accessToken";
+
+function readStoredToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredToken(token: string | null): void {
+  try {
+    if (token) window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // Abaikan kegagalan storage (mode privat dsb): sesi tetap jalan di memori.
+  }
+}
 
 export function useSessionState(): SessionState {
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(() => readStoredToken());
   const [authChallengeId, setAuthChallengeId] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  // Mencegah double restore saat StrictMode me-mount ulang.
+  const [restored, setRestored] = useState(false);
 
   const setSession = useCallback((nextUser: SessionUser, token: string) => {
     setUser(nextUser);
     setAccessToken(token);
+    writeStoredToken(token);
     setAuthChallengeId(null);
     setSessionExpired(false);
+  }, []);
+
+  const setTokenOnly = useCallback((token: string) => {
+    setAccessToken(token);
+    writeStoredToken(token);
   }, []);
 
   const clearSession = useCallback(() => {
     setUser(null);
     setAccessToken(null);
+    writeStoredToken(null);
     setAuthChallengeId(null);
     setSessionExpired(false);
   }, []);
@@ -27,6 +55,7 @@ export function useSessionState(): SessionState {
   const startChallenge = useCallback((challengeId: string) => {
     setUser(null);
     setAccessToken(null);
+    writeStoredToken(null);
     setAuthChallengeId(challengeId);
     setSessionExpired(false);
   }, []);
@@ -34,6 +63,7 @@ export function useSessionState(): SessionState {
   const markSessionExpired = useCallback(() => {
     setUser(null);
     setAccessToken(null);
+    writeStoredToken(null);
     setSessionExpired(true);
   }, []);
 
@@ -52,6 +82,27 @@ export function useSessionState(): SessionState {
     },
     [markSessionExpired, setSession],
   );
+
+  // Daftarkan hooks agar apiClient bisa auto-refresh memakai token terbaru.
+  useEffect(() => {
+    registerSessionHooks({
+      getAccessToken: () => readStoredToken(),
+      setSessionFromRefresh: (token: string) => setTokenOnly(token),
+      markSessionExpired: () => markSessionExpired(),
+    });
+  }, [markSessionExpired, setTokenOnly]);
+
+  // Restore sesi saat reload: token tersimpan -> panggil /auth/me sekali.
+  useEffect(() => {
+    if (restored) return;
+    setRestored(true);
+    const stored = readStoredToken();
+    if (!stored) return;
+    void loadMe(stored).catch(() => {
+      // loadMe sudah menandai expired bila 401; abaikan error di sini.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return useMemo<SessionState>(
     () => ({

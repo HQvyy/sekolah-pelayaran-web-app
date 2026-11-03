@@ -62,7 +62,6 @@ describe("halaman pendaftaran Taruna", () => {
     const user = userEvent.setup();
     renderStandalone(<RegisterPage />, "/register");
     const form = screen.getByRole("form", { name: /formulir pendaftaran/i });
-    await user.type(within(form).getByLabelText(/nama lengkap/i), "Taruna Contoh");
     await user.type(within(form).getByLabelText(/^email$/i), "taruna@example.com");
     await user.type(within(form).getByLabelText(/^password$/i), "Contoh123");
     await user.type(within(form).getByLabelText(/konfirmasi password/i), "Contoh123");

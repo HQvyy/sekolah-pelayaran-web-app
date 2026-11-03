@@ -7,7 +7,6 @@ import { Button, Card, ErrorAlert, FieldError, InfoAlert, SuccessAlert } from ".
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,7 +19,6 @@ export function RegisterPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const nextErrors: Record<string, string> = {};
-    if (!name.trim()) nextErrors.name = "Nama lengkap wajib diisi.";
     if (!isValidEmail(email)) nextErrors.email = "Masukkan email yang valid.";
     const passwordValidation = passwordError(password);
     if (passwordValidation) nextErrors.password = passwordValidation;
@@ -33,10 +31,9 @@ export function RegisterPage() {
     setSubmitError("");
     try {
       await registerTaruna({
-        name: name.trim(),
         email: email.trim(),
         password,
-        dataProcessingConsent: true,
+        consent: true,
       });
       setSuccess(true);
       window.setTimeout(() => navigate("/login", { replace: true }), 1200);
@@ -67,19 +64,6 @@ export function RegisterPage() {
           </SuccessAlert>
         ) : null}
         <form className="form" onSubmit={handleSubmit} aria-label="Formulir pendaftaran Taruna" noValidate>
-          <div className="form-field">
-            <label htmlFor="register-name">Nama lengkap</label>
-            <input
-              id="register-name"
-              autoComplete="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              aria-invalid={errors.name ? "true" : undefined}
-              aria-describedby={errors.name ? "register-name-error" : undefined}
-              placeholder="Nama lengkap Taruna"
-            />
-            <FieldError id="register-name-error" message={errors.name} />
-          </div>
           <div className="form-field">
             <label htmlFor="register-email">Email</label>
             <input

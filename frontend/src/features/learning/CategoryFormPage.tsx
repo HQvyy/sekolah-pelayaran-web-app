@@ -11,7 +11,7 @@ export function CategoryFormPage({ categoryId }: { categoryId?: string }) {
   const accessToken = useAccessToken();
   const { user } = useSession();
   const isEdit = Boolean(categoryId);
-  const [form, setForm] = useState<CategoryPayload>({ name: "", description: "", status: "ACTIVE" });
+  const [form, setForm] = useState<CategoryPayload>({ name: "", description: "", status: "PUBLISHED" });
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState("");
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
@@ -130,8 +130,8 @@ export function CategoryFormPage({ categoryId }: { categoryId?: string }) {
               disabled={!canManage}
               onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as ContentStatus }))}
             >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
+              <option value="PUBLISHED">Terbit</option>
+              <option value="DRAFT">Draf</option>
             </select>
           </div>
           {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}

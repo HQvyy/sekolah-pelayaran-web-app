@@ -6,6 +6,7 @@ import type {
   CategoryQuery,
   ChapterListResult,
   ChapterPayload,
+  CourseCreatePayload,
   CourseDetailResult,
   CourseListResult,
   CoursePayload,
@@ -74,7 +75,7 @@ export function getCourse(id: string, accessToken: string): Promise<CourseDetail
   return apiRequest<CourseDetailResult>(`/courses/${id}`, { accessToken });
 }
 
-export function createCourse(payload: CoursePayload, accessToken: string): Promise<CourseDetailResult> {
+export function createCourse(payload: CourseCreatePayload, accessToken: string): Promise<CourseDetailResult> {
   return apiRequest<CourseDetailResult>("/courses", {
     method: "POST",
     body: JSON.stringify(payload),

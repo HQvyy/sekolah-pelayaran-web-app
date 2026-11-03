@@ -1,5 +1,6 @@
 import { apiRequest } from "../../services/apiClient.ts";
 import type {
+  AccountStatus,
   AddEnrollmentPayload,
   CohortDetailResult,
   CohortListResult,
@@ -7,7 +8,6 @@ import type {
   CohortQuery,
   EnrollmentListResult,
   MyEnrollmentListResult,
-  UpdateUserPayload,
   UserDetailResult,
   UserImportResult,
   UserImportSummary,
@@ -15,6 +15,7 @@ import type {
   UserQuery,
 } from "./accountTypes.ts";
 import type { ApiSuccess } from "../../types/api.ts";
+import type { UserRole } from "../../types/api.ts";
 
 // TODO: endpoint di bawah mengikuti usulan docs/api-specification.md dan kontraknya
 // belum final. Implementasi ini hanya typed service dan belum boleh dianggap kontrak final
@@ -40,14 +41,26 @@ export function getUser(userId: string, accessToken: string): Promise<UserDetail
   return apiRequest<UserDetailResult>(`/admin/users/${userId}`, { accessToken });
 }
 
-export function updateUser(
+export function updateUserStatus(
   userId: string,
-  payload: UpdateUserPayload,
+  status: AccountStatus,
   accessToken: string,
 ): Promise<UserDetailResult> {
-  return apiRequest<UserDetailResult>(`/admin/users/${userId}`, {
+  return apiRequest<UserDetailResult>(`/admin/users/${userId}/status`, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ status }),
+    accessToken,
+  });
+}
+
+export function updateUserRole(
+  userId: string,
+  role: UserRole,
+  accessToken: string,
+): Promise<UserDetailResult> {
+  return apiRequest<UserDetailResult>(`/admin/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
     accessToken,
   });
 }

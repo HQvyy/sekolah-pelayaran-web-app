@@ -119,8 +119,8 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
                     <td>{chapter.order}</td>
                     <td>{chapter.title}</td>
                     <td>
-                      <Badge tone={chapter.status === "ACTIVE" ? "done" : "neutral"}>
-                        {chapter.status === "ACTIVE" ? "Aktif" : "Nonaktif"}
+                      <Badge tone={chapter.status === "PUBLISHED" ? "done" : "neutral"}>
+                        {chapter.status === "PUBLISHED" ? "Terbit" : "Draf"}
                       </Badge>
                     </td>
                     <td>
@@ -143,7 +143,7 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
 
 function ChapterForm({ courseId, onSaved }: { courseId: string; onSaved: () => void }) {
   const accessToken = useAccessToken();
-  const [form, setForm] = useState<ChapterPayload>({ title: "", order: 1, status: "ACTIVE" });
+  const [form, setForm] = useState<ChapterPayload>({ title: "", order: 1, status: "PUBLISHED" });
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -163,7 +163,7 @@ function ChapterForm({ courseId, onSaved }: { courseId: string; onSaved: () => v
     setFormError("");
     try {
       await createChapter(courseId, { ...form, title: form.title.trim() }, accessToken);
-      setForm({ title: "", order: form.order + 1, status: "ACTIVE" });
+      setForm({ title: "", order: form.order + 1, status: "PUBLISHED" });
       onSaved();
     } catch (requestError) {
       if (requestError instanceof ApiError) {
@@ -214,8 +214,8 @@ function ChapterForm({ courseId, onSaved }: { courseId: string; onSaved: () => v
           value={form.status}
           onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as ContentStatus }))}
         >
-          <option value="ACTIVE">Aktif</option>
-          <option value="INACTIVE">Nonaktif</option>
+          <option value="PUBLISHED">Terbit</option>
+          <option value="DRAFT">Draf</option>
         </select>
       </div>
       {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}

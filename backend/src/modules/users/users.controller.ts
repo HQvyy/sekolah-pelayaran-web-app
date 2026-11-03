@@ -28,6 +28,7 @@ import { UsersService } from './users.service';
 import { ImportService } from './import.service';
 import { ImportTemplateService } from './import-template.service';
 import { PrismaService } from '../../database/prisma.service';
+import { ProgressService } from '../services/progress.service';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, RequestUser } from '../auth/current-user.decorator';
 import { ok } from '../../common/envelope';
@@ -204,21 +205,23 @@ export class UsersController {
 
 // Kontrak api-spec: GET /users/{userId}/progress (terpisah dari /admin/users).
 // Controller kecil agar path sesuai kontrak tanpa merombak UsersController.
+// Bentuk agregat (completed/total/percent/unlockedLevel) sama dengan GET /me/progress.
 @ApiTags('admin-users')
 @ApiBearerAuth()
 @Controller('users')
 export class UserProgressController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly progress: ProgressService,
+  ) {}
 
   @Get(':userId/progress')
   @Roles(Role.SUPERADMIN, Role.ADMIN, Role.MENTOR)
   @ApiOperation({ summary: 'Progres Taruna (Admin/Mentor berwenang)' })
-  async userProgress(@Param('userId') userId: string) {
-    const rows = await this.prisma.learningProgress.findMany({
-      where: { userId },
-      include: { assessment: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-    return ok(rows);
+  async userProgress(
+    @Param('userId') userId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return ok(await this.progress.userProgress(actor, userId));
   }
 }

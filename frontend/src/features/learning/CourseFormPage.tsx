@@ -3,7 +3,7 @@ import { ApiError } from "../../services/apiClient.ts";
 import { fieldErrors, useAccessToken } from "../accounts/useAccountList.ts";
 import { useSession } from "../../app/useSession.ts";
 import { createCourse, getCourse, getCategory, updateCourse } from "./learningService.ts";
-import type { ContentStatus, CoursePayload } from "./learningTypes.ts";
+import type { ContentStatus, CourseCreatePayload, CoursePayload } from "./learningTypes.ts";
 import { Button, ButtonLink, Card, ErrorAlert, FieldError, LoadingState } from "../../components/ui.tsx";
 
 export function CourseFormPage({ courseId, categoryId }: { courseId?: string; categoryId?: string }) {
@@ -12,9 +12,10 @@ export function CourseFormPage({ courseId, categoryId }: { courseId?: string; ca
   const isEdit = Boolean(courseId);
   const [form, setForm] = useState<CoursePayload>({
     categoryId: categoryId ?? "",
+    cohortId: "",
     title: "",
     description: "",
-    status: "ACTIVE",
+    status: "PUBLISHED",
   });
   const [categoryName, setCategoryName] = useState("");
   const [loading, setLoading] = useState(isEdit);
@@ -69,6 +70,7 @@ export function CourseFormPage({ courseId, categoryId }: { courseId?: string; ca
     }
     const nextErrors: Record<string, string> = {};
     if (!form.categoryId) nextErrors.categoryId = "Kategori wajib dipilih.";
+    if (!isEdit && !form.cohortId?.trim()) nextErrors.cohortId = "Angkatan (cohort) wajib dipilih untuk kursus baru.";
     if (!form.title.trim()) nextErrors.title = "Judul kursus wajib diisi.";
     setFieldErrorMap(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -77,9 +79,17 @@ export function CourseFormPage({ courseId, categoryId }: { courseId?: string; ca
     setSaved(false);
     try {
       if (courseId) {
-        await updateCourse(courseId, form, accessToken);
+        const { cohortId: _cohortId, ...updatePayload } = form;
+        await updateCourse(courseId, updatePayload, accessToken);
       } else {
-        await createCourse(form, accessToken);
+        const payload: CourseCreatePayload = {
+          categoryId: form.categoryId,
+          cohortId: (form.cohortId ?? "").trim(),
+          title: form.title.trim(),
+          description: form.description,
+          status: form.status,
+        };
+        await createCourse(payload, accessToken);
       }
       setSaved(true);
     } catch (requestError) {
@@ -127,6 +137,21 @@ export function CourseFormPage({ courseId, categoryId }: { courseId?: string; ca
             />
             <FieldError id="course-category-error" message={fieldErrorMap.categoryId} />
           </div>
+          {!isEdit ? (
+            <div className="form-field">
+              <label htmlFor="course-cohort">ID Angkatan (cohort)</label>
+              <input
+                id="course-cohort"
+                value={form.cohortId ?? ""}
+                disabled={!canManage}
+                onChange={(event) => setForm((value) => ({ ...value, cohortId: event.target.value }))}
+                aria-invalid={fieldErrorMap.cohortId ? "true" : undefined}
+                aria-describedby={fieldErrorMap.cohortId ? "course-cohort-error" : undefined}
+                placeholder="Contoh: uuid-angkatan"
+              />
+              <FieldError id="course-cohort-error" message={fieldErrorMap.cohortId} />
+            </div>
+          ) : null}
           <div className="form-field">
             <label htmlFor="course-title">Judul kursus</label>
             <input
@@ -158,8 +183,8 @@ export function CourseFormPage({ courseId, categoryId }: { courseId?: string; ca
               disabled={!canManage}
               onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as ContentStatus }))}
             >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
+              <option value="PUBLISHED">Terbit</option>
+              <option value="DRAFT">Draf</option>
             </select>
           </div>
           {formError ? <ErrorAlert>{formError}</ErrorAlert> : null}

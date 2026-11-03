@@ -212,6 +212,17 @@ export class ContentController {
     return ok(await this.content.deleteMaterial(actor, materialId));
   }
 
+  @Post('materials/:materialId/complete')
+  @ApiOperation({
+    summary: 'Tandai materi selesai (belum tersedia — 501)',
+  })
+  async completeMaterial() {
+    const { ServiceUnavailableException } = await import('@nestjs/common');
+    throw new ServiceUnavailableException(
+      'Penandaan selesai materi belum tersedia: butuh tabel penyelesaian per-pengguna (migrasi).',
+    );
+  }
+
   // ——— Video metadata ———
 
   @Post('materials/:materialId/videos')

@@ -18,7 +18,6 @@ export interface UserQuery {
 }
 
 export interface UpdateUserPayload {
-  name?: string;
   status?: AccountStatus;
   role?: UserRole;
 }
@@ -33,9 +32,10 @@ export interface UserImportSummary {
 
 export interface Cohort {
   id: string;
+  code: string;
   name: string;
   description?: string;
-  status: CohortStatus;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -47,19 +47,35 @@ export interface CohortQuery {
 }
 
 export interface CohortPayload {
+  code: string;
   name: string;
   description?: string;
-  status: CohortStatus;
+  isActive?: boolean;
+}
+
+export interface EnrollmentUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  status: AccountStatus;
+}
+
+export interface EnrollmentCohort {
+  id: string;
+  code: string;
+  name: string;
 }
 
 export interface Enrollment {
   id: string;
   cohortId: string;
   userId: string;
+  status: EnrollmentStatus;
   userName: string;
   userEmail: string;
-  status: EnrollmentStatus;
   createdAt: string;
+  user?: EnrollmentUser;
+  cohort?: EnrollmentCohort;
 }
 
 export interface AddEnrollmentPayload {

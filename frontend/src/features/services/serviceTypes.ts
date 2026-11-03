@@ -19,7 +19,7 @@ export interface TarunaProgressResult {
 
 export interface Rating {
   id: string;
-  classId?: string;
+  lessonId: string;
   mentorId?: string;
   classTitle?: string;
   mentorName?: string;
@@ -27,13 +27,18 @@ export interface Rating {
   feedback?: string;
   createdAt: string;
   updatedAt: string;
-  editableUntil?: string;
+  editedAt?: string | null;
   editCount: number;
+  editableUntil?: string;
 }
 
 export interface RatingPayload {
-  classId?: string;
-  mentorId?: string;
+  lessonId: string;
+  score: number;
+  feedback?: string;
+}
+
+export interface RatingEditPayload {
   score: number;
   feedback?: string;
 }
