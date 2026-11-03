@@ -201,3 +201,24 @@ export class UsersController {
     return ok({ revoked: true });
   }
 }
+
+// Kontrak api-spec: GET /users/{userId}/progress (terpisah dari /admin/users).
+// Controller kecil agar path sesuai kontrak tanpa merombak UsersController.
+@ApiTags('admin-users')
+@ApiBearerAuth()
+@Controller('users')
+export class UserProgressController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Get(':userId/progress')
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.MENTOR)
+  @ApiOperation({ summary: 'Progres Taruna (Admin/Mentor berwenang)' })
+  async userProgress(@Param('userId') userId: string) {
+    const rows = await this.prisma.learningProgress.findMany({
+      where: { userId },
+      include: { assessment: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return ok(rows);
+  }
+}

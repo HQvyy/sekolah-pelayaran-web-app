@@ -50,6 +50,15 @@ export class ContentController {
     return ok(await this.content.createCategory(actor, dto));
   }
 
+  @Get('ship-categories/:id')
+  @ApiOperation({ summary: 'Detail kategori kapal' })
+  async getCategory(
+    @CurrentUser() actor: RequestUser,
+    @Param('id') id: string,
+  ) {
+    return ok(await this.content.getCategory(actor, id));
+  }
+
   @Patch('ship-categories/:id')
   @ApiOperation({ summary: 'Ubah kategori kapal (manager)' })
   async updateCategory(

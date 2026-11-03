@@ -64,6 +64,21 @@ export class ContentService {
     return this.prisma.shipCategory.create({ data });
   }
 
+  async getCategory(actor: ContentActor, id: string) {
+    const category = await this.prisma.shipCategory.findUnique({
+      where: { id },
+      include: { courses: false },
+    });
+    if (!category) throw new NotFoundException('Kategori tidak ditemukan.');
+    if (
+      actor.role === Role.TARUNA &&
+      category.status !== PublishStatus.PUBLISHED
+    ) {
+      throw new NotFoundException('Kategori tidak ditemukan.');
+    }
+    return category;
+  }
+
   async updateCategory(
     actor: ContentActor,
     id: string,

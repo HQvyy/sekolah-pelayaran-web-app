@@ -202,3 +202,30 @@ otomatis di production. Jangan menambahkan data dummy ke production.
   tanpa ToUnicode). Test memastikan PDF valid + milik benar + terproteksi.
 - Postman: `postman/spli-backend-tahap-1-7.postman_collection.json`.
   Swagger: `/docs` (+ tag ratings, certificates, tickets).
+
+## QA Tahap 8 (tanpa fitur baru — audit + pelengkap kontrak)
+
+- Endpoint pelengkap kontrak: `GET /admin/audit-logs` (read-only,
+  Admin/Superadmin), `GET /users/:userId/progress` (Admin/Mentor),
+  `GET /ship-categories/:id` (ikut aturan publikasi).
+- Deviasi kontrak yang disengaja + didokumentasikan (bukan bug):
+  - Status impor dikembalikan langsung di respons POST (tanpa endpoint
+    `GET .../imports/{id}` terpisah); berkas log via `.../errors`.
+  - Video dikelola di bawah materi (`/materials/:id/videos`), bukan CRUD
+    `/videos` terpisah; playback via `POST /videos/:id/playback-token`.
+  - `PATCH /admin/users/:id` umum diganti `/status` + `/role` spesifik
+    (least privilege granular).
+  - `POST /materials/:id/complete` belum ada (pelacakan penyelesaian materi
+    menunggu keputusan unlock; sertifikat Opsi A tidak membutuhkannya).
+  - Verifikasi publik/QR sertifikat tidak dibangun (di luar MVP).
+- Keamanan: tanpa secret hardcoded; password/OTP/token hanya sebagai hash;
+  respons tanpa password/hash/kunci/secret; log tanpa body/sensitif;
+  rate limit auth; CORS env; audit tanpa secret; 14 unique + 34 indeks;
+  transaksi per baris impor + reset password; timestamp UTC, tampilan WIB.
+- Produksi: tanpa mock/seed/secret default — `JWT_SECRET` wajib;
+  `EMAIL_PROVIDER=fake` + `BUNNY_USE_FAKE=true` + `CONFERENCE_USE_FAKE=true`
+  default aman untuk dev/test; tanpa kredensial → gagal aman 503.
+- Target performa (500 pengguna, 100 bersamaan, p95 <500 ms) adalah angka
+  pengembangan — BELUM diukur; bukan klaim tercapai.
+- Postman: `postman/spli-backend-tahap-1-8.postman_collection.json`.
+  Swagger `/docs` (79 path, semua tag domain; smoke test production-mode PASS).
