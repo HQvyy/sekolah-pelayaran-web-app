@@ -1,0 +1,699 @@
+// Skema Prisma code-first (keputusan dikunci — jangan ubah manual di production).
+// Tahap 2: fondasi identity & access (auth, 2FA OTP, session/refresh, reset, audit).
+// Tahap 3: users, cohorts, enrollments, import .xlsx Taruna.
+// Tahap 4: konten pembelajaran (kategori kapal → kursus → bab → materi video).
+// Tahap 5: Live Lesson (jadwal, join, absensi) + notifikasi in-app.
+// Tahap 6: CBT lima level (bank soal, attempt, grading, progres).
+// Tahap 7: rating/feedback, sertifikat PDF, ticketing.
+// Model domain lain menyusul tahap berikutnya
+// mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabel penanda migrasi awal. Bukan data dummy: tidak ada seed,
+// tidak ada akun/fitur.
+model SchemaBaseline {
+  id        String   @id @default(uuid()) @db.Uuid
+  note      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("schema_baseline")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  MENTOR
+  TARUNA
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  LOCKED_TEMPORARY
+}
+
+model User {
+  id               String        @id @default(uuid()) @db.Uuid
+  email            String        @unique @db.Citext
+  passwordHash     String        @map("password_hash")
+  role             Role          @default(TARUNA)
+  status           AccountStatus @default(PENDING_VERIFICATION)
+  // Consent pemrosesan data pribadi (UU PDP) — wajib saat registrasi Taruna.
+  consentGivenAt   DateTime?     @map("consent_given_at") @db.Timestamptz(6)
+  // Lockout: 5 gagal login beruntun ATAU 3 gagal kirim email beruntun → 15 mnt.
+  failedLoginCount Int           @default(0) @map("failed_login_count")
+  failedEmailCount Int           @default(0) @map("failed_email_count")
+  lockedUntil      DateTime?     @map("locked_until") @db.Timestamptz(6)
+  // Verifikasi Taruna oleh Admin/Superadmin.
+  verifiedAt       DateTime?     @map("verified_at") @db.Timestamptz(6)
+  verifiedBy       String?       @map("verified_by") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  otpChallenges  OtpChallenge[]
+  sessions       Session[]
+  resetTokens    PasswordResetToken[]
+  auditLogs      AuditLog[]
+  enrollments    Enrollment[]
+  importJobs     ImportJob[]
+  attempts       Attempt[]
+  progress       LearningProgress[]
+  ratings        Rating[]
+  certificates   Certificate[]
+  tickets        Ticket[]
+  verifiedByUser User?                @relation("UserVerifications", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifications  User[]               @relation("UserVerifications")
+
+  @@index([role, status])
+  @@map("users")
+}
+
+enum OtpPurpose {
+  LOGIN_2FA
+}
+
+enum OtpStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  EXHAUSTED
+}
+
+model OtpChallenge {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  purpose     OtpPurpose @default(LOGIN_2FA)
+  // Hanya hash OTP yang disimpan — tidak pernah plaintext.
+  otpHash     String     @map("otp_hash")
+  status      OtpStatus  @default(PENDING)
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5) @map("max_attempts")
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz(6)
+  // Throttle resend: 1x per 60 detik per challenge aktif.
+  lastSentAt  DateTime   @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  verifiedAt  DateTime?  @map("verified_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, expiresAt])
+  @@map("otp_challenges")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  // Hanya hash refresh token yang disimpan — tidak pernah plaintext.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  // Perangkat ke-4 mencabut sesi terlama: diurutkan via createdAt.
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // Hanya hash token yang disimpan — tidak pernah plaintext.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// Audit log Tahap 2–3: perubahan status akun, verifikasi, forced logout,
+// kegagalan email pemicu lock, reset password, impor, enrollment.
+// Tanpa secret/kredensial.
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String
+  targetId  String?  @map("target_id") @db.Uuid
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+// Angkatan/Kelas. Kode unik dipakai sebagai kunci impor .xlsx (cohort_kode).
+model Cohort {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollments Enrollment[]
+  courses     Course[]
+  liveLessons LiveLesson[]
+  assessments Assessment[]
+
+  @@map("cohorts")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Enrollment {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  cohortId  String           @map("cohort_id") @db.Uuid
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, cohortId])
+  @@index([cohortId, status])
+  @@map("enrollments")
+}
+
+enum ImportKind {
+  TARUNA_ACCOUNTS
+}
+
+enum ImportStatus {
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+}
+
+// Jejak impor .xlsx: ringkasan berhasil/gagal per berkas. Detail per baris
+// tidak disimpan di DB (ada di berkas log .xlsx yang diunduh), kecuali jumlah.
+model ImportJob {
+  id           String       @id @default(uuid()) @db.Uuid
+  kind         ImportKind   @default(TARUNA_ACCOUNTS)
+  fileName     String       @map("file_name")
+  totalRows    Int          @map("total_rows")
+  successCount Int          @map("success_count")
+  failedCount  Int          @map("failed_count")
+  status       ImportStatus
+  createdBy    String       @map("created_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([createdBy, createdAt])
+  @@map("import_jobs")
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Kategori Kapal (master). Kategori awal PRD: Bulk Carrier, Tanker,
+// Container Ship, Passenger Ship — diisi via seed/endpoint admin, bukan
+// hardcode, agar tambahan butuh persetujuan klien.
+model ShipCategory {
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String        @unique
+  description String?
+  status      PublishStatus @default(DRAFT)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@index([status, sortOrder])
+  @@map("ship_categories")
+}
+
+model Course {
+  id          String        @id @default(uuid()) @db.Uuid
+  categoryId  String        @map("category_id") @db.Uuid
+  cohortId    String        @map("cohort_id") @db.Uuid
+  title       String
+  description String?
+  status      PublishStatus @default(DRAFT)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category ShipCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cohort   Cohort       @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  chapters Chapter[]
+
+  @@index([categoryId, status, sortOrder])
+  @@index([cohortId, status])
+  @@map("courses")
+}
+
+model Chapter {
+  id        String        @id @default(uuid()) @db.Uuid
+  courseId  String        @map("course_id") @db.Uuid
+  title     String
+  status    PublishStatus @default(DRAFT)
+  sortOrder Int           @default(0) @map("sort_order")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  materials Material[]
+
+  @@index([courseId, status, sortOrder])
+  @@map("chapters")
+}
+
+enum VideoStatus {
+  PENDING_UPLOAD
+  READY
+  FAILED
+}
+
+model Material {
+  id            String        @id @default(uuid()) @db.Uuid
+  chapterId     String        @map("chapter_id") @db.Uuid
+  title         String
+  description   String?
+  status        PublishStatus @default(DRAFT)
+  sortOrder     Int           @default(0) @map("sort_order")
+  // Thumbnail disimpan sebagai path/URL internal — bukan biner di DB.
+  thumbnailPath String?       @map("thumbnail_path")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  videos  Video[]
+
+  @@index([chapterId, status, sortOrder])
+  @@map("materials")
+}
+
+// Metadata + referensi video Bunny Stream. Berkas TIDAK lewat server aplikasi;
+// backend hanya menyimpan ID koleksi/library dan status kesiapan.
+model Video {
+  id              String      @id @default(uuid()) @db.Uuid
+  materialId      String      @map("material_id") @db.Uuid
+  title           String
+  provider        String      @default("bunny")
+  providerVideoId String?     @map("provider_video_id")
+  libraryId       String?     @map("library_id")
+  status          VideoStatus @default(PENDING_UPLOAD)
+  durationSeconds Int?        @map("duration_seconds")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, status])
+  @@map("videos")
+}
+
+enum LessonStatus {
+  SCHEDULED
+  ONGOING
+  FINISHED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+// Live Lesson: jadwal milik mentor untuk satu cohort. URL/embed konferensi
+// TIDAK disimpan mentah untuk publik — materi join diterbitkan saat join
+// yang valid (lihat ConferenceProvider).
+model LiveLesson {
+  id            String       @id @default(uuid()) @db.Uuid
+  cohortId      String       @map("cohort_id") @db.Uuid
+  mentorId      String       @map("mentor_id") @db.Uuid
+  title         String
+  description   String?
+  // Timestamp UTC; aturan tanggal dihitung backend zona Asia/Jakarta.
+  startsAt      DateTime     @map("starts_at") @db.Timestamptz(6)
+  endsAt        DateTime     @map("ends_at") @db.Timestamptz(6)
+  status        LessonStatus @default(SCHEDULED)
+  // Referensi ruang konferensi (bukan URL mentah untuk Taruna).
+  roomReference String?      @map("room_reference")
+  createdBy     String       @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cohort       Cohort              @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  participants LessonParticipant[]
+  attendances  AttendanceRecord[]
+  auditLogs    LessonAuditLog[]
+
+  @@index([cohortId, startsAt])
+  @@index([mentorId, startsAt])
+  @@map("live_lessons")
+}
+
+model LessonParticipant {
+  id        String   @id @default(uuid()) @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([userId])
+  @@map("lesson_participants")
+}
+
+model AttendanceRecord {
+  id          String           @id @default(uuid()) @db.Uuid
+  lessonId    String           @map("lesson_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  status      AttendanceStatus @default(PRESENT)
+  // Sumber pencatatan: JOIN (tombol aplikasi) atau MANUAL (koreksi mentor).
+  source      String           @default("JOIN")
+  // Absensi ditutup 24 jam setelah sesi berakhir (PRD §4.3).
+  recordedAt  DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  correctedBy String?          @map("corrected_by") @db.Uuid
+  correctedAt DateTime?        @map("corrected_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([lessonId, status])
+  @@map("attendance_records")
+}
+
+// Audit perubahan jadwal/absensi Live Lesson (di luar audit log umum agar
+// riwayat per lesson mudah ditelusuri).
+model LessonAuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  actorId   String   @map("actor_id") @db.Uuid
+  action    String
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lesson LiveLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, createdAt])
+  @@map("lesson_audit_logs")
+}
+
+enum NotificationKind {
+  SCHEDULE_CREATED
+  SCHEDULE_CHANGED
+  SCHEDULE_CANCELLED
+  ESSAY_OVERDUE
+  CERTIFICATE_ISSUED
+}
+
+// Notifikasi in-app per pengguna. Email dikirim via adapter untuk event
+// yang sama (bila EMAIL_PROVIDER real); isi email tanpa secret.
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  kind      NotificationKind
+  title     String
+  body      String
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+enum QuestionType {
+  PG
+  ESSAY
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_GRADED
+  WAITING_MANUAL_GRADING
+  GRADED
+  EXPIRED
+}
+
+// Assessment CBT per level per cohort. Aturan kelulusan (passing grade, maks
+// attempt, jeda, remedial) adalah KONFIGURASI sementara (env), bukan hardcode
+// final — menunggu konfirmasi klien (PRD §4.4/§11, rencana §6.1 butir 4).
+model Assessment {
+  id              String        @id @default(uuid()) @db.Uuid
+  cohortId        String        @map("cohort_id") @db.Uuid
+  level           Int
+  title           String
+  description     String?
+  // Durasi pengerjaan dalam menit (timer server).
+  durationMinutes Int           @map("duration_minutes")
+  status          PublishStatus @default(DRAFT)
+  createdBy       String        @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cohort    Cohort             @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  questions Question[]
+  attempts  Attempt[]
+  progress  LearningProgress[]
+
+  @@unique([cohortId, level])
+  @@index([cohortId, status])
+  @@map("assessments")
+}
+
+model Question {
+  id           String       @id @default(uuid()) @db.Uuid
+  assessmentId String       @map("assessment_id") @db.Uuid
+  type         QuestionType
+  prompt       String
+  // Bobot nilai soal (default 1). Kunci jawaban TIDAK di sini untuk esai.
+  weight       Float        @default(1)
+  sortOrder    Int          @default(0) @map("sort_order")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assessment Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options    AnswerOption[]
+
+  @@index([assessmentId, sortOrder])
+  @@map("questions")
+}
+
+model AnswerOption {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  label      String
+  // Benar/salah HANYA di server; tidak pernah dikirim ke Taruna.
+  isCorrect  Boolean @default(false) @map("is_correct")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, sortOrder])
+  @@map("answer_options")
+}
+
+// Attempt: satu kali pengerjaan oleh satu Taruna. Timer authoritative di
+// server (startedAt/expiresAt); randomisasi urutan soal+opsi dicatat
+// (shuffledQuestionIds/shuffledOptionIds) untuk audit.
+model Attempt {
+  id                  String        @id @default(uuid()) @db.Uuid
+  assessmentId        String        @map("assessment_id") @db.Uuid
+  userId              String        @map("user_id") @db.Uuid
+  status              AttemptStatus @default(IN_PROGRESS)
+  startedAt           DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt           DateTime      @map("expires_at") @db.Timestamptz(6)
+  submittedAt         DateTime?     @map("submitted_at") @db.Timestamptz(6)
+  shuffledQuestionIds Json          @map("shuffled_question_ids") @db.JsonB
+  shuffledOptionIds   Json          @map("shuffled_option_ids") @db.JsonB
+  // Skor akhir 0–100 (PG auto + esai manual). Null selama belum final.
+  score               Float?
+  passed              Boolean?
+  // Idempotency: kunci client per submit agar request ulang aman.
+  submitKey           String?       @map("submit_key")
+  submitResult        Json?         @map("submit_result") @db.JsonB
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assessment Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+  grades     ManualGrade[]
+
+  @@index([userId, assessmentId, status])
+  @@index([assessmentId, status])
+  @@map("attempts")
+}
+
+// Jawaban per soal per attempt. Esai = teks; PG = optionId. updatedAt dipakai
+// untuk urutan autosave (last-write-wins per soal).
+model Answer {
+  id         String   @id @default(uuid()) @db.Uuid
+  attemptId  String   @map("attempt_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  optionId   String?  @map("option_id") @db.Uuid
+  essayText  String?  @map("essay_text")
+  // Skor PG per jawaban (0 atau weight); esai null sampai dinilai.
+  autoScore  Float?   @map("auto_score")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("answers")
+}
+
+// Penilaian esai manual oleh pemeriksa berwenang (siapa, kapan, skor, feedback).
+model ManualGrade {
+  id         String   @id @default(uuid()) @db.Uuid
+  attemptId  String   @map("attempt_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  graderId   String   @map("grader_id") @db.Uuid
+  score      Float
+  maxScore   Float    @map("max_score")
+  feedback   String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([graderId])
+  @@map("manual_grades")
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  PASSED
+  FAILED
+}
+
+// Progres per Taruna per assessment — dihitung backend, tidak dari client.
+model LearningProgress {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  assessmentId String         @map("assessment_id") @db.Uuid
+  status       ProgressStatus @default(NOT_STARTED)
+  bestScore    Float?         @map("best_score")
+  attemptsUsed Int            @default(0) @map("attempts_used")
+  passedAt     DateTime?      @map("passed_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assessmentId])
+  @@index([userId, status])
+  @@map("learning_progress")
+}
+
+// Rating 1–5, tidak anonim, terkait kelas (live lesson) + mentor.
+// Syarat: enrollment aktif pada cohort lesson. Edit maksimal 1× dalam
+// 7 hari sejak rating pertama (dihitung backend).
+model Rating {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  lessonId  String    @map("lesson_id") @db.Uuid
+  mentorId  String    @map("mentor_id") @db.Uuid
+  score     Int
+  feedback  String?
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([lessonId])
+  @@index([mentorId])
+  @@map("ratings")
+}
+
+// Sertifikat program internal (BUKAN sertifikat resmi STCW — disclaimer
+// tercetak di PDF). Nomor unik server-side; syarat terbit Opsi A: seluruh
+// level 1–5 PASSED pada cohort yang sama (keputusan Tahap 7).
+model Certificate {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  cohortId  String   @map("cohort_id") @db.Uuid
+  number    String   @unique
+  fullName  String   @map("full_name")
+  issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, cohortId])
+  @@map("certificates")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Tiket pengaduan. Taruna: milik sendiri. Admin: support/kelola. Mentor
+// TIDAK otomatis punya akses support (keputusan PRD §2/§4.6).
+model Ticket {
+  id          String       @id @default(uuid()) @db.Uuid
+  reporterId  String       @map("reporter_id") @db.Uuid
+  title       String
+  description String
+  category    String       @default("GENERAL")
+  status      TicketStatus @default(OPEN)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reporter User            @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  history  TicketHistory[]
+
+  @@index([reporterId, status])
+  @@index([status, updatedAt])
+  @@map("tickets")
+}
+
+// Riwayat penanganan tiket: setiap perubahan status/komentar dicatat
+// (actor, waktu, status dari→ke, komentar).
+model TicketHistory {
+  id         String        @id @default(uuid()) @db.Uuid
+  ticketId   String        @map("ticket_id") @db.Uuid
+  actorId    String        @map("actor_id") @db.Uuid
+  fromStatus TicketStatus? @map("from_status")
+  toStatus   TicketStatus? @map("to_status")
+  comment    String?
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_history")
+}

@@ -1,0 +1,19 @@
+# Dependencies & build
+node_modules/
+dist/
+coverage/
+
+# Environment (jangan commit secret)
+.env
+.env.*
+!.env.example
+
+# Prisma
+prisma/migrations/dev.db*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
