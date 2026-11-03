@@ -1,7 +1,8 @@
 // Skema Prisma code-first (keputusan dikunci — jangan ubah manual di production).
 // Tahap 2: fondasi identity & access (auth, 2FA OTP, session/refresh, reset, audit).
 // Tahap 3: users, cohorts, enrollments, import .xlsx Taruna.
-// Model domain lain (konten, CBT, dst.) menyusul tahap berikutnya
+// Tahap 4: konten pembelajaran (kategori kapal → kursus → bab → materi video).
+// Model domain lain (CBT, dsb.) menyusul tahap berikutnya
 // mengikuti ERD draft docs/backend-implementation-plan.md §3 (status draft).
 
 generator client {
@@ -162,6 +163,7 @@ model Cohort {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   enrollments Enrollment[]
+  courses     Course[]
 
   @@map("cohorts")
 }
@@ -213,4 +215,109 @@ model ImportJob {
 
   @@index([createdBy, createdAt])
   @@map("import_jobs")
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Kategori Kapal (master). Kategori awal PRD: Bulk Carrier, Tanker,
+// Container Ship, Passenger Ship — diisi via seed/endpoint admin, bukan
+// hardcode, agar tambahan butuh persetujuan klien.
+model ShipCategory {
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String        @unique
+  description String?
+  status      PublishStatus @default(DRAFT)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@index([status, sortOrder])
+  @@map("ship_categories")
+}
+
+model Course {
+  id          String        @id @default(uuid()) @db.Uuid
+  categoryId  String        @map("category_id") @db.Uuid
+  cohortId    String        @map("cohort_id") @db.Uuid
+  title       String
+  description String?
+  status      PublishStatus @default(DRAFT)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category ShipCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cohort   Cohort       @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  chapters Chapter[]
+
+  @@index([categoryId, status, sortOrder])
+  @@index([cohortId, status])
+  @@map("courses")
+}
+
+model Chapter {
+  id        String        @id @default(uuid()) @db.Uuid
+  courseId  String        @map("course_id") @db.Uuid
+  title     String
+  status    PublishStatus @default(DRAFT)
+  sortOrder Int           @default(0) @map("sort_order")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  materials Material[]
+
+  @@index([courseId, status, sortOrder])
+  @@map("chapters")
+}
+
+enum VideoStatus {
+  PENDING_UPLOAD
+  READY
+  FAILED
+}
+
+model Material {
+  id            String        @id @default(uuid()) @db.Uuid
+  chapterId     String        @map("chapter_id") @db.Uuid
+  title         String
+  description   String?
+  status        PublishStatus @default(DRAFT)
+  sortOrder     Int           @default(0) @map("sort_order")
+  // Thumbnail disimpan sebagai path/URL internal — bukan biner di DB.
+  thumbnailPath String?       @map("thumbnail_path")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  videos  Video[]
+
+  @@index([chapterId, status, sortOrder])
+  @@map("materials")
+}
+
+// Metadata + referensi video Bunny Stream. Berkas TIDAK lewat server aplikasi;
+// backend hanya menyimpan ID koleksi/library dan status kesiapan.
+model Video {
+  id              String      @id @default(uuid()) @db.Uuid
+  materialId      String      @map("material_id") @db.Uuid
+  title           String
+  provider        String      @default("bunny")
+  providerVideoId String?     @map("provider_video_id")
+  libraryId       String?     @map("library_id")
+  status          VideoStatus @default(PENDING_UPLOAD)
+  durationSeconds Int?        @map("duration_seconds")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, status])
+  @@map("videos")
 }

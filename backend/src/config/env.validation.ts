@@ -34,4 +34,10 @@ export const validationSchema = Joi.object({
   // Secret penandatangan access token: tidak ada default; wajib diisi agar
   // aplikasi tidak pernah berjalan dengan secret yang bisa ditebak.
   JWT_SECRET: Joi.string().min(32).required(),
+  // Bunny Stream: fake default untuk dev/test; produksi wajib kredensial via
+  // secret manager (tanpa kredensial → endpoint integrasi gagal aman 503).
+  BUNNY_USE_FAKE: Joi.boolean().truthy('true').falsy('false').default(true),
+  BUNNY_API_KEY: Joi.string().allow('').default(''),
+  BUNNY_LIBRARY_ID: Joi.string().allow('').default(''),
+  BUNNY_CDN_HOSTNAME: Joi.string().allow('').default(''),
 });

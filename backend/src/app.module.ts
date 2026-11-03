@@ -11,6 +11,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CohortsModule } from './modules/cohorts/cohorts.module';
+import { ContentModule } from './modules/content/content.module';
+import { VideosModule } from './modules/videos/videos.module';
 
 @Module({
   imports: [
@@ -44,6 +46,8 @@ import { CohortsModule } from './modules/cohorts/cohorts.module';
     AuthModule,
     UsersModule,
     CohortsModule,
+    VideosModule,
+    ContentModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

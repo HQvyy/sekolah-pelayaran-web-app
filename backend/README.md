@@ -108,5 +108,25 @@ otomatis di production. Jangan menambahkan data dummy ke production.
   aktif. Enroll hanya Taruna ACTIVE (duplikat aktif 409; re-enroll mengaktifkan
   kembali). `GET /me/enrollments` milik Taruna sendiri.
 - Audit: verifikasi, status, role, pembuatan akun, impor, cohort, enrollment.
-- Postman: `postman/spli-backend-tahap-1-3.postman_collection.json`.
-  Swagger: `/docs` (tag operational, auth, admin-users, cohorts, me).
+- Postman: `postman/spli-backend-tahap-1-4.postman_collection.json`.
+  Swagger: `/docs` (tag operational, auth, admin-users, cohorts, me, content).
+
+## Konten + Video Tahap 4 (ringkas)
+
+- Hirarki: Kategori Kapal → Kursus (terikat cohort) → Bab → Materi → Video.
+  Kategori awal PRD (Bulk Carrier, Tanker, Container Ship, Passenger Ship)
+  diisi via endpoint/seed, bukan hardcode.
+- Kelola (CRUD, status DRAFT/PUBLISHED/ARCHIVED, sortOrder): Admin/Superadmin/
+  Mentor. Taruna: baca hanya PUBLISHED + enrollment aktif pada cohort kursus;
+  lintas enrollment disamarkan 404.
+- Video: metadata di DB, berkas tidak lewat server. `POST /videos/:id/
+  playback-token` mengecek enrollment + rantai publikasi + status READY;
+  respons: `{ videoId, playbackToken, expiresAt, scanStatus }`.
+- Bunny: adapter `BunnyService` + `FakeBunnyProvider` (dev/test,
+  `BUNNY_USE_FAKE=true`); token fake berprefix `FAKE-` jelas bukan sungguhan.
+  Tanpa kredensial + fake mati → 503 gagal aman (bukan token palsu).
+- Thumbnail: `POST /materials/:id/thumbnail` — JPG/PNG ≤2 MB, ≤1920×1080
+  (validasi dimensi tanpa dependensi native). `scanStatus: PENDING_PROVIDER` —
+  backend TIDAK mengklaim pemeriksaan malware tersedia.
+- Thumbnail disimpan sebagai path internal (`thumbnails/...`); file fisik +
+  object storage menunggu keputusan infra (bukan klaim produksi).
