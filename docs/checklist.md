@@ -10,15 +10,17 @@ Legenda: `[ ]` belum dites · `[x]` lolos · `[~]` lolos dengan catatan/deviasi 
 
 ## 1. Pengujian otomatis (gate CI/CD)
 
-- [ ] Backend `typecheck` (tsc --noEmit) — *status terakhir: PASS (QA Tahap 8)*
-- [ ] Backend `lint` (eslint) — *status terakhir: PASS*
-- [ ] Backend unit test (`npm test`) — *status terakhir: 3 suite / 11 test PASS*
-- [ ] Backend e2e dengan PostgreSQL test nyata (`npm run test:e2e`) — *status terakhir: 9 suite / 54 test PASS*
-- [ ] Backend `build` (nest build) — *status terakhir: PASS*
-- [ ] `prisma validate` + `migrate status` sinkron dev/test — *status terakhir: PASS (8–9 migrasi)*
-- [ ] Frontend `typecheck`, `lint`, `build`, dan seluruh test Vitest (services 11, CBT 10, routes 16, auth 11, accounts 7, learning 9, live 10, apiClient 3, components 1) — *status terakhir: PASS*
-- [ ] CI pipeline `.github/workflows/backend-ci.yml` benar-benar berjalan di GitHub Actions (saat ini file ada tapi **belum pernah berjalan**)
-- [ ] Smoke production-mode: start tanpa `DATABASE_URL` gagal dengan pesan validasi jelas; dengan DB → `/health` ok, `/ready` up, Swagger terisi, endpoint terlindungi 401 — *status terakhir: PASS lokal*
+Dieksekusi lokal 2026-11-05, branch `dev`. e2e diarahkan ke DB `spli_test` lewat override `DATABASE_URL` (PowerShell membaca `.env` lalu mengganti nama DB) — `spli_dev` tidak disentuh.
+
+- [x] Backend `typecheck` (tsc --noEmit) — PASS
+- [x] Backend `lint` (eslint) — PASS, tanpa warning
+- [x] Backend unit test (`npm test`) — 3 suite / 11 test PASS
+- [x] Backend e2e dengan PostgreSQL test nyata (`npm run test:e2e`) — 9 suite / 54 test PASS (±38 dtk, DB `spli_test`)
+- [x] Backend `build` (nest build) — PASS
+- [x] `prisma validate` + `migrate status` sinkron dev/test — PASS (9 migrasi, up-to-date)
+- [~] Frontend `typecheck`, `build`, dan seluruh test Vitest 78/78 PASS; `lint` PASS dengan **3 warning**: `set-state-in-effect` di `useAccountList.ts:48` & `UserPages.tsx:286`, `only-export-components` di `CategoryPages.tsx:198`
+- [x] CI pipeline `.github/workflows/backend-ci.yml` — **berjalan dan HIJAU**. 3 run pertama (run #1 `c92180c` branch `be`, run #2 `622ce15`, run #3 `2130edc` branch `dev`) gagal di step `npm ci` dengan *"Missing: webpack@5.112.2 from lock file"*: lockfile dibuat npm 12 (lokal), CI node 22 memakai npm 10 yang menempatkan peer-dependency webpack secara berbeda. Diperbaiki di `2a74690` (lock diregenerasi dengan npm 10; `npm ci --dry-run` terverifikasi lulus di npm 10, 11, dan 12). Run #4 (commit `2a74690`) **success** ±83 dtk di ubuntu-latest + layanan PostgreSQL 18 — seluruh step hijau: `npm ci` 17 dtk, `prisma:deploy`, `typecheck`, `lint`, unit test, e2e 54 test 28 dtk, `build` (bukti: run id 41969158588).
+- [x] Smoke production-mode: start tanpa `DATABASE_URL` gagal cepat dengan `Config validation error` yang jelas; dengan DB test di port 3999 → `/api/v1/health` 200, `/ready` 200 (database up), `/docs` + `/docs-json` 200, `/api/v1/admin/users` tanpa auth → 401, login kredensial tak dikenal → 401 tanpa enumerasi; log production **tanpa OTP** dan tiap request ber-`requestId`
 
 ## 2. Matriks umum per endpoint API (api-spec §16)
 
