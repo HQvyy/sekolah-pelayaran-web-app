@@ -51,7 +51,7 @@ export function DashboardPage() {
         </h1>
         <p className="muted">
           {user
-            ? `Masuk sebagai ${user.name} (${user.role}). Halaman ini hanya menampilkan navigasi sesuai peran. Angka ringkasan menunggu endpoint backend final dan tidak dikarang di frontend.`
+            ? `Masuk sebagai ${user.name ?? user.email} (${user.role}). Halaman ini hanya menampilkan navigasi sesuai peran. Angka ringkasan menunggu endpoint backend final dan tidak dikarang di frontend.`
             : "Masuk untuk melihat dasbor sesuai peran. Guard ini hanya UX, otorisasi resmi tetap di backend."}
         </p>
         {!user ? (

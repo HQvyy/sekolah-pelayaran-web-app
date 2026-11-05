@@ -43,12 +43,13 @@ export interface RatingEditPayload {
   feedback?: string;
 }
 
+// Bentuk mengikuti respons backend: nomor, nama pemilik, dan tanggal terbit.
 export interface Certificate {
   id: string;
-  certificateNumber: string;
-  title: string;
+  number: string;
+  fullName: string;
   issuedAt: string;
-  ownerName?: string;
+  cohortId?: string;
 }
 
 export interface Ticket {

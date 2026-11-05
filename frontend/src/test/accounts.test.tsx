@@ -20,6 +20,7 @@ function adminSession() {
     accessToken: "token-admin",
     authChallengeId: null,
     sessionExpired: false,
+    restoring: false,
     setSession: vi.fn(),
     clearSession: vi.fn(),
     startChallenge: vi.fn(),

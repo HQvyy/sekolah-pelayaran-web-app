@@ -52,9 +52,9 @@ export interface AuthResetPasswordPayload {
   newPassword: string;
 }
 
-export interface AuthMeResponse {
-  user: SessionUser;
-}
+// GET /auth/me mengembalikan objek user langsung di `data` (tanpa pembungkus
+// `user`), sesuai kontrak backend dan e2e test.
+export type AuthMeResponse = SessionUser & { status: string };
 
 export interface AuthRoleResponse {
   role: UserRole;

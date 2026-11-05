@@ -22,6 +22,7 @@ function tarunaSession() {
     accessToken: "token-taruna",
     authChallengeId: null,
     sessionExpired: false,
+    restoring: false,
     setSession: vi.fn(),
     clearSession: vi.fn(),
     startChallenge: vi.fn(),
@@ -139,7 +140,7 @@ describe("sertifikat internal", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(
           {
-            data: [{ id: "cert-1", certificateNumber: "SPLI-1", title: "Dasar Pelayaran", issuedAt: "2026-11-01T00:00:00.000Z" }],
+            data: [{ id: "cert-1", number: "SPLI-1", fullName: "Dasar Pelayaran", issuedAt: "2026-11-01T00:00:00.000Z" }],
           },
           200,
         ),

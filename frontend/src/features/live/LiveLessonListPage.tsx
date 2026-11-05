@@ -21,7 +21,7 @@ const PAGE_SIZE = 20;
 function statusTone(status: LiveLessonStatus): "open" | "progress" | "done" | "neutral" {
   if (status === "SCHEDULED") return "open";
   if (status === "ONGOING") return "progress";
-  if (status === "COMPLETED" || status === "RESCHEDULED") return "done";
+  if (status === "FINISHED" || status === "COMPLETED" || status === "RESCHEDULED") return "done";
   return "neutral";
 }
 

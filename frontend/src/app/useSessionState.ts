@@ -28,6 +28,7 @@ export function useSessionState(): SessionState {
   const [accessToken, setAccessToken] = useState<string | null>(() => readStoredToken());
   const [authChallengeId, setAuthChallengeId] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [restoring, setRestoring] = useState(() => Boolean(readStoredToken()));
   // Mencegah double restore saat StrictMode me-mount ulang.
   const [restored, setRestored] = useState(false);
 
@@ -71,8 +72,8 @@ export function useSessionState(): SessionState {
     async (token: string): Promise<SessionUser> => {
       try {
         const result = await fetchMe(token);
-        setSession(result.data.user, token);
-        return result.data.user;
+        setSession(result.data, token);
+        return result.data;
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           markSessionExpired();
@@ -97,10 +98,15 @@ export function useSessionState(): SessionState {
     if (restored) return;
     setRestored(true);
     const stored = readStoredToken();
-    if (!stored) return;
-    void loadMe(stored).catch(() => {
-      // loadMe sudah menandai expired bila 401; abaikan error di sini.
-    });
+    if (!stored) {
+      setRestoring(false);
+      return;
+    }
+    void loadMe(stored)
+      .catch(() => {
+        // loadMe sudah menandai expired bila 401; abaikan error di sini.
+      })
+      .finally(() => setRestoring(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -110,6 +116,7 @@ export function useSessionState(): SessionState {
       accessToken,
       authChallengeId,
       sessionExpired,
+      restoring,
       setSession,
       clearSession,
       startChallenge,
@@ -122,6 +129,7 @@ export function useSessionState(): SessionState {
       accessToken,
       authChallengeId,
       sessionExpired,
+      restoring,
       setSession,
       clearSession,
       startChallenge,

@@ -20,6 +20,7 @@ function tarunaSession() {
     accessToken: "token-taruna",
     authChallengeId: null,
     sessionExpired: false,
+    restoring: false,
     setSession: vi.fn(),
     clearSession: vi.fn(),
     startChallenge: vi.fn(),

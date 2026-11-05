@@ -6,6 +6,9 @@ export interface SessionState {
   accessToken: string | null;
   authChallengeId: string | null;
   sessionExpired: boolean;
+  // True selama sesi tersimpan masih dipulihkan lewat /auth/me; guard harus
+  // menunggu agar tidak melempar ke /login sebelum user termuat.
+  restoring: boolean;
   setSession: (user: SessionUser, accessToken: string) => void;
   clearSession: () => void;
   startChallenge: (challengeId: string) => void;

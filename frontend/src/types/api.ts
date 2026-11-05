@@ -2,7 +2,8 @@ export type UserRole = "SUPERADMIN" | "ADMIN" | "MENTOR" | "TARUNA";
 
 export interface SessionUser {
   id: string;
-  name: string;
+  // Backend belum menyimpan nama tampilan; UI memakai email bila kosong.
+  name?: string;
   email: string;
   role: UserRole;
 }

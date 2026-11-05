@@ -30,6 +30,7 @@ export function LiveLessonDetailPage({ liveLessonId }: { liveLessonId: string })
   const [joining, setJoining] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [joinRoom, setJoinRoom] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN" || user?.role === "MENTOR";
@@ -70,19 +71,27 @@ export function LiveLessonDetailPage({ liveLessonId }: { liveLessonId: string })
     setJoining(true);
     setJoinMessage("");
     setJoinError("");
+    setJoinRoom("");
     try {
       const result = await joinLiveLesson(lesson.id, accessToken);
-      if (result.data.status === "JOIN_ALLOWED") {
-        setJoinMessage(
-          result.data.attendanceRecorded
-            ? "Akses disetujui backend dan kehadiran tercatat."
-            : "Akses disetujui backend. Ikuti instruksi resmi untuk masuk kelas.",
-        );
-        if (result.data.redirectUrl && typeof window !== "undefined") {
-          window.location.href = result.data.redirectUrl;
-        }
-      } else {
-        setJoinError(result.data.message || "Backend menolak permintaan join untuk jadwal ini.");
+      const data = result.data;
+      const allowed = data.status === "JOIN_ALLOWED" || Boolean(data.join);
+      if (!allowed) {
+        setJoinError(data.message || "Backend menolak permintaan join untuk jadwal ini.");
+        return;
+      }
+      // Backend Tahap 5 mengirim materi join + recordedAt, bukan redirectUrl.
+      const recorded = data.attendanceRecorded ?? Boolean(data.recordedAt);
+      setJoinMessage(
+        recorded
+          ? "Akses disetujui backend dan kehadiran tercatat."
+          : "Akses disetujui backend. Ikuti instruksi resmi untuk masuk kelas.",
+      );
+      if (data.join) {
+        setJoinRoom(`${data.join.roomName} (${data.join.domain})`);
+      }
+      if (data.redirectUrl && typeof window !== "undefined") {
+        window.location.href = data.redirectUrl;
       }
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 403) {
@@ -154,6 +163,7 @@ export function LiveLessonDetailPage({ liveLessonId }: { liveLessonId: string })
         {joinMessage ? (
           <div className="alert alert-success" role="status">
             {joinMessage}
+            {joinRoom ? ` Ruang kelas: ${joinRoom}.` : ""}
           </div>
         ) : null}
         {joinError ? <ErrorAlert>{joinError}</ErrorAlert> : null}

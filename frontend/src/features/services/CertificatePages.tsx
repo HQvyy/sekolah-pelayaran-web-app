@@ -69,8 +69,9 @@ export function CertificateListPage() {
         ) : (
           items.map((item) => (
             <Card key={item.id}>
-              <h2>{item.title}</h2>
-              <p className="muted">Nomor: {item.certificateNumber}</p>
+              <h2>Sertifikat Program Internal</h2>
+              <p className="muted">Nomor: {item.number}</p>
+              <p className="muted">Nama: {item.fullName}</p>
               <p className="muted">Diterbitkan {formatWib(item.issuedAt)}.</p>
               <div className="button-row">
                 <ButtonLink to={`/sertifikat/${item.id}`}>Detail</ButtonLink>
@@ -149,10 +150,10 @@ export function CertificateDetailPage({ certificateId }: { certificateId: string
   return (
     <div className="page">
       <Card>
-        <h1>{certificate.title}</h1>
-        <p className="muted">Nomor: {certificate.certificateNumber}</p>
+        <h1>Sertifikat Program Internal</h1>
+        <p className="muted">Nomor: {certificate.number}</p>
+        <p className="muted">Nama: {certificate.fullName}</p>
         <p className="muted">Diterbitkan {formatWib(certificate.issuedAt)}.</p>
-        {certificate.ownerName ? <p className="muted">Pemilik: {certificate.ownerName}</p> : null}
         <p className="muted">
           Sertifikat program internal Sekolah Pelaut Indonesia, bukan sertifikat resmi STCW.
         </p>

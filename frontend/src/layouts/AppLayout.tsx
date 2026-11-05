@@ -97,7 +97,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="header-meta">
             <span className="brand-subtitle">
-              {user ? `${user.name} (${user.role})` : "Belum masuk"}
+              {user ? `${user.name ?? user.email} (${user.role})` : "Belum masuk"}
             </span>
             <LogoutButton />
           </div>

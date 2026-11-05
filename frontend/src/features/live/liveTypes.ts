@@ -1,6 +1,14 @@
 import type { ApiSuccess } from "../../types/api.ts";
 
-export type LiveLessonStatus = "SCHEDULED" | "ONGOING" | "COMPLETED" | "CANCELLED" | "RESCHEDULED";
+// FINISHED adalah status backend; COMPLETED/RESCHEDULED dipertahankan untuk
+// kompatibilitas data lama di UI.
+export type LiveLessonStatus =
+  | "SCHEDULED"
+  | "ONGOING"
+  | "FINISHED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "RESCHEDULED";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "EXCUSED" | "PENDING";
 
 export interface LiveLesson {
@@ -37,10 +45,14 @@ export interface LiveLessonPayload {
 }
 
 export interface JoinLiveLessonResult {
-  status: "JOIN_ALLOWED" | "JOIN_DENIED";
+  status?: "JOIN_ALLOWED" | "JOIN_DENIED";
   redirectUrl?: string;
   message?: string;
   attendanceRecorded?: boolean;
+  // Bentuk respons backend saat ini: materi join + waktu absensi tercatat.
+  lessonId?: string;
+  recordedAt?: string;
+  join?: { roomName: string; domain: string; displayName: string };
 }
 
 export interface AttendanceRecord {
