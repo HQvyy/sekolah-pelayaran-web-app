@@ -42,6 +42,33 @@ Tidak ada seed otomatis. Seed development (bila kelak diperlukan) wajib berada d
 file terpisah yang eksplisit dijalankan manual dan **tidak pernah** berjalan
 otomatis di production. Jangan menambahkan data dummy ke production.
 
+Akun admin pertama dibuat manual lewat `scripts/create-admin.ts` (default role
+`SUPERADMIN`, status `ACTIVE`, password di-hash argon2id):
+
+```bash
+npm run admin:create -- --email admin@spli.local --password 'Password123'
+# atau lewat env: ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run admin:create
+```
+
+Script ini idempoten (upsert by email) dan menolak password < 8 karakter atau
+tanpa huruf/angka. Di dev dengan `EMAIL_PROVIDER=fake`, kode OTP login tercetak
+di log backend (`[fake-email] OTP ...`); di production kode tidak pernah dicatat.
+
+Data demo untuk pengujian UI (kategori, kursus, materi/video, angkatan,
+enrollment, kelas live, CBT 5 level, attempt, sertifikat, rating, tiket,
+dan notifikasi) dibuat oleh script terpisah yang juga dijalankan manual:
+
+```bash
+npm run seed:dev -- --password 'DemoSpli2026'
+# atau lewat env: SEED_PASSWORD=... npm run seed:dev
+```
+
+Akun demo yang dibuat (password sama dengan `--password`):
+`mentor@spli.local`, `taruna@spli.local` (data lengkap), `taruna2@spli.local`
+(fresh), dan `taruna.pending@spli.local` (untuk uji verifikasi admin).
+Script bersifat idempoten: aman dijalankan ulang, tidak menghapus data pengguna
+lain, dan tidak pernah dijalankan otomatis.
+
 ## Perintah
 
 | Perintah | Kegunaan |

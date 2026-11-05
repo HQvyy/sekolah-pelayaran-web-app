@@ -23,8 +23,14 @@ export class FakeEmailService implements EmailService {
 
   async sendOtp(params: SendOtpParams): Promise<void> {
     this.maybeFail('otp');
-    // OTP dicatat hanya di log test/dev — tidak pernah di production.
     this.record('otp', params.to, params.code);
+    // Dev/test: kode ditampilkan di log agar alur login 2FA bisa diselesaikan
+    // tanpa email nyata. Production tidak pernah mencatat kode OTP.
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(
+        `[fake-email] OTP ${params.to}: ${params.code} (berlaku s.d. ${params.expiresAt.toISOString()})`,
+      );
+    }
   }
 
   async sendPasswordReset(params: SendPasswordResetParams): Promise<void> {
