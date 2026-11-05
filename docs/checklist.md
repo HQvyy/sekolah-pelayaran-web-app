@@ -211,7 +211,7 @@ Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 
 - [ ] `restore.sh` diuji ke DB staging kosong: verifikasi checksum, hitung baris `users` & `_prisma_migrations`, cocokkan MANIFEST, boot + `/ready` — uji restore triwulan sebelum Go-Live, semesteran sesudahnya, hasil didokumentasikan
 - [ ] Backup minimal bulanan + salinan off-site, retensi arsip ≥ 12 bulan; SOP dapat diaudit klien
 - [ ] Runbook: `/ready` 503, 5xx massal, lockout massal, email gagal, Bunny 503, absensi/grade telat — tiap skenario punya jalur tindakan terverifikasi
-- [~] Swagger/OpenAPI 79 path + Postman Collection untuk alur utama tersedia di deliverable final — Swagger aktif (`/docs` + `/docs-json`, 200 di smoke); jumlah path terdaftar saat ini **80 handler** (13 controller); **Postman Collection belum dibuat**
+- [~] Swagger/OpenAPI 79 path + Postman Collection untuk alur utama tersedia di deliverable final — Swagger aktif (`/docs` + `/docs-json`, 200 di smoke); jumlah handler route terdaftar saat ini **106** (13 controller) vs ±79 path di spec (beberapa path punya >1 metode); **Postman Collection belum dibuat**
 - [ ] Checklist BAST/UAT klien (runbook §6): login→OTP→dashboard 4 role; alur materi→assessment→hasil→progres (95% taruna uji tanpa bantuan); koreksi esai ≤7 hari; video + ticketing lolos integrasi; UAT disetujui tertulis sebelum Go-Live
 
 ## 18. Blokir Go-Live yang belum bisa dites (butuh keputusan/kredensial)
