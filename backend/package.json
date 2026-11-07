@@ -24,7 +24,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "admin:create": "ts-node scripts/create-admin.ts",
-    "seed:dev": "ts-node scripts/seed-dev.ts"
+    "seed:dev": "ts-node scripts/seed-dev.ts",
+    "reset:demo-passwords": "ts-node scripts/reset-demo-passwords.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
