@@ -119,6 +119,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return ErrorCode.RATE_LIMITED;
       case HttpStatus.SERVICE_UNAVAILABLE:
         return ErrorCode.SERVICE_UNAVAILABLE;
+      case HttpStatus.GONE:
+        return ErrorCode.GONE;
       default:
         return status >= 500
           ? ErrorCode.INTERNAL_ERROR

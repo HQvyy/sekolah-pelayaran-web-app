@@ -11,6 +11,7 @@ import {
   Put,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -40,7 +41,9 @@ import {
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, RequestUser } from '../auth/current-user.decorator';
 import { ok } from '../../common/envelope';
+import { IdempotencyKey } from '../../common/idempotency-key.decorator';
 import { CBT_RULES } from './cbt.rules';
+import { UploadThrottleGuard } from '../../common/throttle/upload-throttle.guard';
 
 @ApiTags('assessments')
 @ApiBearerAuth()
@@ -168,15 +171,22 @@ export class AssessmentsController {
 
   @Put('attempts/:attemptId/answers/:questionId')
   @Roles(Role.TARUNA)
-  @ApiOperation({ summary: 'Autosave jawaban satu soal' })
+  @ApiOperation({ summary: 'Autosave jawaban satu soal (opsional idempotent)' })
   async autosave(
     @CurrentUser() actor: RequestUser,
     @Param('attemptId') attemptId: string,
     @Param('questionId') questionId: string,
     @Body() dto: AutosaveAnswerDto,
+    @IdempotencyKey() idempotencyKey?: string,
   ) {
     return ok(
-      await this.attempts.autosave(actor.id, attemptId, questionId, dto),
+      await this.attempts.autosave(
+        actor.id,
+        attemptId,
+        questionId,
+        dto,
+        idempotencyKey,
+      ),
     );
   }
 
@@ -240,6 +250,7 @@ export class AssessmentsController {
 
   @Post('assessments/:id/questions/import')
   @Roles(Role.SUPERADMIN, Role.ADMIN, Role.MENTOR)
+  @UseGuards(UploadThrottleGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),

@@ -31,9 +31,11 @@ import { ServicesModule } from './modules/services/services.module';
       },
     }),
     // Rate limit global default dari konfigurasi; endpoint sensitif
-    // (login, OTP, reset) mendapat batas sendiri pada tahap auth.
-    // Di NODE_ENV=test, batas dilonggarkan agar E2E tidak saling menghabiskan
-    // kuota dari IP yang sama; proteksi nyata diuji via test header 429.
+    // (login, OTP, reset) mendapat batas sendiri pada tahap auth, dan endpoint
+    // impor/unggahan mendapat batas per-pengguna via UploadThrottleGuard
+    // (lihat common/throttle). Di NODE_ENV=test batas global dilonggarkan
+    // agar E2E tidak saling menghabiskan kuota dari IP yang sama; batas
+    // per-route/pengguna yang tetap aktif diuji di suite e2e tersendiri.
     ThrottlerModule.forRoot([
       {
         name: 'default',

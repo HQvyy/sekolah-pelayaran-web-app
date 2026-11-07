@@ -256,3 +256,55 @@ lain, dan tidak pernah dijalankan otomatis.
   pengembangan — BELUM diukur; bukan klaim tercapai.
 - Postman: `postman/spli-backend-tahap-1-8.postman_collection.json`.
   Swagger `/docs` (79 path, semua tag domain; smoke test production-mode PASS).
+
+## Hardening pasca-Tahap 8 (perbaikan temuan audit)
+
+- **Kuota impor/upload:** `UploadThrottleGuard` (`src/common/throttle/`)
+  membatasi impor Taruna, impor soal, dan upload thumbnail menjadi
+  10 permintaan per jam per pengguna. Respons 429 + header `Retry-After`.
+  Guard butuh identitas (401 bila token tidak valid). Penyimpanan
+  in-memory per instance — saat menjalankan beberapa instance, kuota
+  harus dipindahkan ke store bersama (mis. Redis).
+- **Idempotency-Key** (header opsional) untuk operasi yang mudah terkirim
+  dua kali akibat retry jaringan:
+  - `PUT /attempts/:attemptId/answers/:questionId` (autosave jawaban)
+  - `POST /tickets`
+  - `POST /certificates`
+  Kunci yang sama + payload sama → mengembalikan hasil percobaan pertama
+  (replay). Kunci yang sama + **payload berbeda** → 409. Kunci dicatat
+  pada baris data yang bersangkutan (`Answer`, `Ticket`, `Certificate`),
+  bukan pada tabel terpisah. Lihat `src/common/idempotency.ts`.
+- **Kode error seragam:** kegagalan aturan bisnis saat menerbitkan
+  sertifikat (syarat kelulusan belum terpenuhi) memakai
+  422 `UNPROCESSABLE_ENTITY`; konflik data (sertifikat sudah terbit,
+  transisi status ilegal, batas edit rating, `Idempotency-Key` dipakai
+  ulang dengan payload berbeda) tetap 409 `CONFLICT`.
+- **Notifikasi:**
+  - `ESSAY_OVERDUE` → seluruh Admin/Superadmin aktif saat penilaian esai
+    melewati tenggat (`overdueGrading`).
+  - `CERTIFICATE_ISSUED` → pemilik sertifikat saat sertifikat terbit.
+- **Guard start-up produksi** (`src/config/env.validation.ts`): ketika
+  `NODE_ENV=staging|production`, aplikasi menolak start bila
+  `EMAIL_PROVIDER` bukan `smtp`, bila `BUNNY_USE_FAKE`/
+  `CONFERENCE_USE_FAKE` bernilai `true`, atau bila kredensial
+  `BUNNY_*` belum diisi. Dev/test tetap boleh memakai adapter palsu.
+- **Hapus permanen user (Superadmin):** `DELETE /admin/users/:userId`
+  menghapus user beserta sesinya dan menulis audit log
+  `user.deleted_permanently` (metadata hanya email/role/status — tidak
+  ada data sensitif). Superadmin terakhir tidak boleh dihapus (403).
+  Pengguna non-Taruna lain dinonaktifkan lewat `PATCH .../status`;
+  endpoint ini untuk kasus penghapusan data yang benar-benar diminta.
+  Catatan: `audit_logs.actor_id` memakai `ON DELETE SET NULL`, jadi saat
+  Superadmin menghapus dirinya sendiri kolom itu menjadi NULL — karena itu
+  identitas aktor juga disalin ke `metadata.actorEmail`/`actorRole`.
+- **Validasi tipe berkas (AND) + sanitasi nama berkas**
+  (`src/common/uploads.ts`): impor Taruna dan impor soal menolak berkas
+  yang **mimetype ATAU ekstensinya** bukan `.xlsx` (sebelumnya OR —
+  berkas `.csv`/`.gif` yang diubah namanya bisa lolos). Nama berkas
+  dibersihkan (hanya `[A-Za-z0-9._-]`, dibatasi panjang, tanpa path)
+  sebelum dicatat/diunduh. Thumbnail tidak terpengaruh (nama berkas
+  penyimpanan dibuat sendiri, tidak dari input pengguna).
+- **Kode error `410 Gone`:** challenge OTP kedaluwarsa, token reset habis
+  masa pakai, dan token sekali pakai kini memetakan ke kode error `GONE`
+  (`src/common/envelope.ts`) — sebelumnya jatuh ke `VALIDATION_ERROR`
+  yang menyesatkan bagi klien.

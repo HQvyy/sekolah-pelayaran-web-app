@@ -167,6 +167,22 @@ describe('Tahap 6 CBT slice (e2e)', () => {
     expect(template.status).toBe(200);
   });
 
+  it('bank soal: .xlsx palsu (mimetype & ekstensi beda) ditolak 415', async () => {
+    // Pengecekan tipe memakai AND — berkas non-xlsx yang diubah namanya
+    // menjadi .xlsx tetap ditolak.
+    const ctx = await seedCbt('BANKMIME');
+    const res = await agent()
+      .post(`/api/v1/assessments/${ctx.assessment.id}/questions/import`)
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .set('Content-Type', 'multipart/form-data')
+      .attach('file', Buffer.from('level,kategori_kapal'), {
+        filename: 'palsu.xlsx',
+        contentType: 'text/csv',
+      });
+    expect(res.status).toBe(415);
+    expect(res.body.error.message).toMatch(/\.xlsx/);
+  });
+
   it('attempt: timer server, tanpa answer key, ownership dijaga', async () => {
     const ctx = await seedCbt('OWN');
     const started = await agent()
@@ -355,5 +371,60 @@ describe('Tahap 6 CBT slice (e2e)', () => {
     expect(overdue.status).toBe(200);
     expect(overdue.body.data.length).toBeGreaterThanOrEqual(1);
     expect(overdue.body.data[0].overdue).toBe(true);
+    // Notifikasi ESSAY_OVERDUE masuk ke Admin (in-app).
+    const adminNotice = await prisma.notification.findFirst({
+      where: { userId: ctx.admin.id, kind: 'ESSAY_OVERDUE' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(adminNotice).not.toBeNull();
+    expect(adminNotice?.body).toContain(attemptId);
+  });
+
+  it('autosave: Idempotency-Key mereplikasi jawaban; isi beda → 409', async () => {
+    const ctx = await seedCbt('IDEM');
+    const started = await agent()
+      .post(`/api/v1/assessments/${ctx.assessment.id}/attempts`)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .send({});
+    const attemptId = started.body.data.attemptId as string;
+    const questions = await prisma.question.findMany({
+      where: { assessmentId: ctx.assessment.id },
+      include: { options: true },
+    });
+    const essay = questions.find((item) => item.type === 'ESSAY');
+    expect(essay).toBeDefined();
+    const key = `autosave-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const url = `/api/v1/attempts/${attemptId}/answers/${essay!.id}`;
+    const first = await agent()
+      .put(url)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ essayText: 'Jawaban pertama.' });
+    expect(first.status).toBe(200);
+    // Replay key+payload sama → updatedAt dari penyimpanan pertama.
+    const replay = await agent()
+      .put(url)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ essayText: 'Jawaban pertama.' });
+    expect(replay.status).toBe(200);
+    expect(replay.body.data.updatedAt).toBe(first.body.data.updatedAt);
+    // Key sama + isi berbeda → 409.
+    const clash = await agent()
+      .put(url)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ essayText: 'Jawaban lain.' });
+    expect(clash.status).toBe(409);
+    // Tanpa key tetap bebas memperbarui jawaban.
+    const normal = await agent()
+      .put(url)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .send({ essayText: 'Jawaban final.' });
+    expect(normal.status).toBe(200);
+    const answer = await prisma.answer.findUnique({
+      where: { attemptId_questionId: { attemptId, questionId: essay!.id } },
+    });
+    expect(answer?.essayText).toBe('Jawaban final.');
   });
 });

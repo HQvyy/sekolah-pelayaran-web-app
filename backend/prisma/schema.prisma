@@ -559,6 +559,11 @@ model Answer {
   essayText  String?  @map("essay_text")
   // Skor PG per jawaban (0 atau weight); esai null sampai dinilai.
   autoScore  Float?   @map("auto_score")
+  // Idempotency autosave: key dari header Idempotency-Key pada
+  // PUT /attempts/{attemptId}/answers/{questionId}. Hash payload disimpan
+  // agar replay key+payload sama tidak menimpan ulang (jawaban sudah ada).
+  idempotencyKey     String? @map("idempotency_key") @db.VarChar(100)
+  idempotencyPayload String? @map("idempotency_payload") @db.VarChar(64)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -646,11 +651,15 @@ model Certificate {
   fullName  String   @map("full_name")
   issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
   createdBy String   @map("created_by") @db.Uuid
+  // Idempotency: key dari header Idempotency-Key pada POST /certificates.
+  idempotencyKey     String? @map("idempotency_key") @db.VarChar(100)
+  idempotencyPayload String? @map("idempotency_payload") @db.VarChar(64)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, cohortId])
+  @@index([createdBy, idempotencyKey])
   @@map("certificates")
 }
 
@@ -670,6 +679,11 @@ model Ticket {
   description String
   category    String       @default("GENERAL")
   status      TicketStatus @default(OPEN)
+  // Idempotency: key dari header Idempotency-Key pada POST /tickets.
+  // Hash payload disimpan (bukan isi) untuk mendeteksi pemakaian ulang key
+  // dengan payload berbeda → 409.
+  idempotencyKey     String? @map("idempotency_key") @db.VarChar(100)
+  idempotencyPayload String? @map("idempotency_payload") @db.VarChar(64)
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -678,6 +692,7 @@ model Ticket {
 
   @@index([reporterId, status])
   @@index([status, updatedAt])
+  @@index([reporterId, idempotencyKey])
   @@map("tickets")
 }
 

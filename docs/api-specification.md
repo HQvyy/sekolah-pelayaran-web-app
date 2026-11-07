@@ -96,10 +96,10 @@ Kontrak `data/meta` ini adalah **usulan format konsisten**, bukan kutipan litera
 | `401 Unauthorized` | Belum terautentikasi, token invalid/kedaluwarsa, atau 2FA belum selesai |
 | `403 Forbidden` | Identitas valid tetapi tidak memiliki izin |
 | `404 Not Found` | Resource tidak ditemukan atau sengaja disamarkan sesuai kebijakan keamanan |
-| `409 Conflict` | Konflik status, duplicate submit, enrollment, atau perubahan yang tidak diperbolehkan |
+| `409 Conflict` | Konflik status, duplikat data (mis. rating/sertifikat sudah ada), submit idempoten dengan payload berbeda, atau perubahan yang tidak diperbolehkan |
 | `413 Payload Too Large` | Ukuran upload melebihi batas |
 | `415 Unsupported Media Type` | Tipe file/media tidak didukung |
-| `422 Unprocessable Entity` | Business rule gagal setelah request terstruktur valid |
+| `422 Unprocessable Entity` | Business rule gagal setelah request terstruktur valid (mis. syarat penerbitan sertifikat belum terpenuhi) |
 | `429 Too Many Requests` | Rate limit, OTP resend/login throttle |
 | `500 Internal Server Error` | Kesalahan tak terduga tanpa detail internal |
 | `503 Service Unavailable` | Ketergantungan layanan sementara tidak tersedia |

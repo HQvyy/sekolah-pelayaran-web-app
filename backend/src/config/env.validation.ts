@@ -29,19 +29,47 @@ export const validationSchema = Joi.object({
   MAX_ATTEMPTS: Joi.number().integer().min(1).default(3),
   ATTEMPT_COOLDOWN_HOURS: Joi.number().min(0).default(24),
   REMEDIAL_AFTER_FAILURES: Joi.number().integer().min(1).default(3),
-  EMAIL_PROVIDER: Joi.string().valid('fake', 'smtp').default('fake'),
+  // Provider email: 'fake' hanya untuk dev/test. Di production aplikasi TIDAK
+  // BOLEH start dengan provider palsu (OTP/reset tercetak ke log, tidak terkirim).
+  EMAIL_PROVIDER: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.string().valid('smtp').required(),
+    otherwise: Joi.string().valid('fake', 'smtp').default('fake'),
+  }),
   EMAIL_FROM: Joi.string().allow('').default(''),
   // Secret penandatangan access token: tidak ada default; wajib diisi agar
   // aplikasi tidak pernah berjalan dengan secret yang bisa ditebak.
   JWT_SECRET: Joi.string().min(32).required(),
   // Bunny Stream: fake default untuk dev/test; produksi wajib kredensial via
   // secret manager (tanpa kredensial → endpoint integrasi gagal aman 503).
-  BUNNY_USE_FAKE: Joi.boolean().truthy('true').falsy('false').default(true),
-  BUNNY_API_KEY: Joi.string().allow('').default(''),
-  BUNNY_LIBRARY_ID: Joi.string().allow('').default(''),
-  BUNNY_CDN_HOSTNAME: Joi.string().allow('').default(''),
+  // Fake provider juga DITOLAK di staging/production: aplikasi harus start
+  // bersih atau gagal terang-terangan, bukan mengembalikan token palsu.
+  BUNNY_USE_FAKE: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.boolean().truthy('true').falsy('false').default(false).invalid(true),
+    otherwise: Joi.boolean().truthy('true').falsy('false').default(true),
+  }),
+  BUNNY_API_KEY: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.string().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
+  BUNNY_LIBRARY_ID: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.string().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
+  BUNNY_CDN_HOSTNAME: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.string().hostname().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
   // Konferensi Live Lesson (Jitsi default; fake dev/test). Tanpa kredensial
   // Jitsi publik tetap jalan (ruang publik); JWT self-host menyusul bila perlu.
-  CONFERENCE_USE_FAKE: Joi.boolean().truthy('true').falsy('false').default(true),
+  CONFERENCE_USE_FAKE: Joi.when('NODE_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.boolean().truthy('true').falsy('false').default(false).invalid(true),
+    otherwise: Joi.boolean().truthy('true').falsy('false').default(true),
+  }),
   JITSI_DOMAIN: Joi.string().allow('').default(''),
 });

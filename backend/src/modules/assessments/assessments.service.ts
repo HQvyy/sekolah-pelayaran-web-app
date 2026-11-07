@@ -7,6 +7,7 @@ import {
 import { PublishStatus, Role } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsCenter } from '../notifications/notifications-center.service';
 import { CBT_AUDIT_ACTIONS } from './cbt.rules';
 
 export interface CbtManager {
@@ -21,6 +22,7 @@ export class AssessmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notices: NotificationsCenter,
   ) {}
 
   private assertManager(actor: CbtManager): void {
@@ -256,10 +258,23 @@ export class AssessmentsService {
   }
 
   // Esai melewati SLA 7 hari: untuk Admin (laporan keterlambatan PRD §4.4).
+  // Sekaligus memicu notifikasi in-app sekali per attempt yang terlambat.
   async overdueGrading(actor: CbtManager) {
     this.assertManager(actor);
     const queue = await this.essayQueue(actor);
-    return queue.filter((item) => item.overdue);
+    const overdue = queue.filter((item) => item.overdue);
+    const attemptIds = new Set(overdue.map((item) => item.attemptId));
+    for (const attemptId of attemptIds) {
+      const item = overdue.find((entry) => entry.attemptId === attemptId);
+      if (!item || !item.submittedAt) continue;
+      await this.notices.essayOverdue({
+        level: item.level,
+        assessmentId: item.assessmentId,
+        attemptId,
+        submittedAt: new Date(item.submittedAt),
+      });
+    }
+    return overdue;
   }
 }
 

@@ -14,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { checkIdempotency, payloadHash } from '../../common/idempotency';
 import { CBT_AUDIT_ACTIONS } from './cbt.rules';
 
 export interface CbtActor {
@@ -222,12 +223,15 @@ export class AttemptsService {
   }
 
   // Autosave satu jawaban: validasi ownership + status aktif + deadline.
-  // Last-write-wins per (attempt, question) via upsert.
+  // Last-write-wins per (attempt, question) via upsert. Idempoten via
+  // header Idempotency-Key: key sama + payload sama → status tersimpan
+  // dikembalikan tanpa penulisan ulang; key sama + payload beda → 409.
   async autosave(
     userId: string,
     attemptId: string,
     questionId: string,
     input: { optionId?: string; essayText?: string },
+    idempotencyKey?: string,
   ) {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
@@ -260,17 +264,46 @@ export class AttemptsService {
     if (input.essayText !== undefined && question.type !== 'ESSAY') {
       throw new ConflictException('Soal ini bukan esai.');
     }
+    // Idempotency autosave: baris jawaban sudah unik per (attempt, question),
+    // jadi key+payload disimpan pada baris itu. Key sama + isi sama → replay
+    // tanpa menulis ulang; key sama + isi beda → 409 (key dipakai ulang).
+    const payload = {
+      optionId: input.optionId ?? null,
+      essayText: input.essayText ?? null,
+    };
+    if (idempotencyKey) {
+      const stored = await this.prisma.answer.findUnique({
+        where: { attemptId_questionId: { attemptId, questionId } },
+      });
+      const match = checkIdempotency(stored, idempotencyKey, payload);
+      if (match.conflict) {
+        throw new ConflictException(
+          'Idempotency-Key sudah dipakai dengan isi permintaan yang berbeda.',
+        );
+      }
+      if (match.replay) {
+        return {
+          attemptId,
+          questionId,
+          updatedAt: match.replay.updatedAt.toISOString(),
+          serverNow: new Date().toISOString(),
+        };
+      }
+    }
     const saved = await this.prisma.answer.upsert({
       where: { attemptId_questionId: { attemptId, questionId } },
       create: {
         attemptId,
         questionId,
-        optionId: input.optionId ?? null,
-        essayText: input.essayText ?? null,
+        ...payload,
+        idempotencyKey: idempotencyKey ?? null,
+        idempotencyPayload: idempotencyKey ? payloadHash(payload) : null,
       },
       update: {
         optionId: input.optionId ?? null,
         essayText: input.essayText ?? null,
+        idempotencyKey: idempotencyKey ?? null,
+        idempotencyPayload: idempotencyKey ? payloadHash(payload) : null,
       },
     });
     return {

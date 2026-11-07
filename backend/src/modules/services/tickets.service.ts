@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SERVICE_AUDIT_ACTIONS, TICKET_TRANSITIONS } from './services.rules';
 import { paginated } from '../../common/envelope';
+import { checkIdempotency, payloadHash } from '../../common/idempotency';
 import {
   DEFAULT_PAGE,
   DEFAULT_PAGE_SIZE,
@@ -73,7 +74,27 @@ export class TicketsService {
     return paginated(rows, page, pageSize, totalItems);
   }
 
-  async create(reporterId: string, input: { title: string; description: string; category?: string }) {
+  async create(
+    reporterId: string,
+    input: { title: string; description: string; category?: string },
+    idempotencyKey?: string,
+  ) {
+    if (idempotencyKey) {
+      const existing = await this.prisma.ticket.findFirst({
+        where: { reporterId, idempotencyKey },
+      });
+      const match = checkIdempotency(existing, idempotencyKey, {
+        title: input.title,
+        description: input.description,
+        category: input.category ?? 'GENERAL',
+      });
+      if (match.conflict) {
+        throw new ConflictException(
+          'Idempotency-Key sudah dipakai dengan isi permintaan yang berbeda.',
+        );
+      }
+      if (match.replay) return match.replay;
+    }
     const ticket = await this.prisma.ticket.create({
       data: {
         reporterId,
@@ -81,6 +102,14 @@ export class TicketsService {
         description: input.description,
         category: input.category ?? 'GENERAL',
         status: TicketStatus.OPEN,
+        idempotencyKey: idempotencyKey ?? null,
+        idempotencyPayload: idempotencyKey
+          ? payloadHash({
+              title: input.title,
+              description: input.description,
+              category: input.category ?? 'GENERAL',
+            })
+          : null,
       },
     });
     await this.prisma.ticketHistory.create({

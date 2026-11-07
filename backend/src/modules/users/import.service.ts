@@ -7,6 +7,7 @@ import {
 import { AccountStatus, ImportStatus, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../database/prisma.service';
+import { sanitizeFileName, validateUploadType } from '../../common/uploads';
 import { AuditService } from '../audit/audit.service';
 import {
   ImportTemplateService,
@@ -56,15 +57,18 @@ export class ImportService {
     actorId: string,
   ): Promise<ImportSummary> {
     if (!file) throw new BadRequestException('Berkas .xlsx wajib diunggah.');
-    if (
-      !IMPORT_RULES.MINE_TYPES.includes(file.mimetype) &&
-      !file.originalname.toLowerCase().endsWith('.xlsx')
-    ) {
-      throw new UnsupportedMediaTypeException('Hanya berkas .xlsx yang didukung.');
+    // Validasi AND: mimetype harus .xlsx DAN ekstensi harus .xlsx. Sebelumnya
+    // memakai OR (lolos bila salah satu cocok), sehingga berkas .csv/.gif yang
+    // diubah namanya menjadi .xlsx tetap diterima.
+    const typeError = validateUploadType(file, IMPORT_RULES.MINE_TYPES, 'xlsx');
+    if (typeError) {
+      throw new UnsupportedMediaTypeException(typeError);
     }
     if (file.size > IMPORT_RULES.MAX_FILE_BYTES) {
       throw new PayloadTooLargeException('Ukuran berkas melebihi 5 MB.');
     }
+    // Nama berkas sudah dibersihkan — aman dicatat/diunduh kembali.
+    const safeFileName = sanitizeFileName(file.originalname);
     let rows: ParsedImportRow[];
     try {
       rows = await this.templates.parse(file.buffer);
@@ -171,7 +175,7 @@ export class ImportService {
     const failedCount = reports.filter((item) => !item.success).length;
     const job = await this.prisma.importJob.create({
       data: {
-        fileName: file.originalname,
+        fileName: safeFileName,
         totalRows: rows.length,
         successCount,
         failedCount,
@@ -186,7 +190,7 @@ export class ImportService {
       actorId,
       targetId: job.id,
       metadata: {
-        fileName: file.originalname,
+        fileName: safeFileName,
         totalRows: rows.length,
         successCount,
         failedCount,
@@ -200,7 +204,7 @@ export class ImportService {
     if (errorLog) this.errorLogs.set(job.id, errorLog);
     return {
       importId: job.id,
-      fileName: file.originalname,
+      fileName: safeFileName,
       totalRows: rows.length,
       successCount,
       failedCount,

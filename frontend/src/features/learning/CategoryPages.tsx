@@ -3,7 +3,7 @@ import { ApiError } from "../../services/apiClient.ts";
 import { useAccessToken, usePaginatedList } from "../accounts/useAccountList.ts";
 import { useSession } from "../../app/useSession.ts";
 import { deleteCategory, listCategories } from "./learningService.ts";
-import type { CategoryQuery, ContentStatus, ShipCategory } from "./learningTypes.ts";
+import type { CategoryQuery, ShipCategory } from "./learningTypes.ts";
 import {
   Badge,
   Button,
@@ -193,8 +193,4 @@ function DeleteCategoryButton({ categoryId, onDone }: { categoryId: string; onDo
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}
     </>
   );
-}
-
-export function categoryStatusLabel(status: ContentStatus): string {
-  return status === "PUBLISHED" ? "Terbit" : "Draf";
 }

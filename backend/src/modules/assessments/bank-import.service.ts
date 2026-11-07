@@ -5,6 +5,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { sanitizeFileName, validateUploadType } from '../../common/uploads';
 import { AuditService } from '../audit/audit.service';
 import { BankTemplateService } from './bank-template.service';
 import { CBT_AUDIT_ACTIONS, CBT_RULES } from './cbt.rules';
@@ -51,15 +52,22 @@ export class BankImportService {
       throw new BadRequestException('Assessment tidak ditemukan.');
     }
     if (!file) throw new BadRequestException('Berkas .xlsx wajib diunggah.');
-    if (
-      !CBT_RULES.IMPORT_MINE_TYPES.includes(file.mimetype) &&
-      !file.originalname.toLowerCase().endsWith('.xlsx')
-    ) {
-      throw new UnsupportedMediaTypeException('Hanya berkas .xlsx yang didukung.');
+    // Validasi AND: mimetype harus .xlsx DAN ekstensi harus .xlsx. Sebelumnya
+    // memakai OR (lolos bila salah satu cocok), sehingga berkas .csv/.gif yang
+    // diubah namanya menjadi .xlsx tetap diterima.
+    const typeError = validateUploadType(
+      file,
+      CBT_RULES.IMPORT_MINE_TYPES,
+      'xlsx',
+    );
+    if (typeError) {
+      throw new UnsupportedMediaTypeException(typeError);
     }
     if (file.size > CBT_RULES.IMPORT_MAX_FILE_BYTES) {
       throw new PayloadTooLargeException('Ukuran berkas melebihi 5 MB.');
     }
+    // Nama berkas sudah dibersihkan — aman dicatat/diunduh kembali.
+    const safeFileName = sanitizeFileName(file.originalname);
     let rows;
     try {
       rows = await this.templates.parse(file.buffer);
@@ -161,7 +169,7 @@ export class BankImportService {
       actorId,
       targetId: assessmentId,
       metadata: {
-        fileName: file.originalname,
+        fileName: safeFileName,
         totalRows: rows.length,
         successCount,
         failedCount,
@@ -170,7 +178,7 @@ export class BankImportService {
     return {
       importId,
       assessmentId,
-      fileName: file.originalname,
+      fileName: safeFileName,
       totalRows: rows.length,
       successCount,
       failedCount,

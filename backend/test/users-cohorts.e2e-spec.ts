@@ -157,6 +157,99 @@ describe('Tahap 3 users/cohorts/enrollment/impor (e2e)', () => {
     expect(res.status).toBe(403);
   });
 
+  it('hapus permanen: hanya Superadmin + tercatat di audit log', async () => {
+    const sa = await makeUser('delsa', Role.SUPERADMIN);
+    const admin = await makeUser('deladmin', Role.ADMIN);
+    const victim = await makeUser('delvictim', Role.TARUNA);
+    const saToken = await loginAs(sa.email);
+    const adminToken = await loginAs(admin.email);
+    // Admin ditolak (403) — aksi ini khusus Superadmin.
+    const denied = await agent()
+      .delete(`/api/v1/admin/users/${victim.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(denied.status).toBe(403);
+    expect(await prisma.user.findUnique({ where: { id: victim.id } })).not.toBeNull();
+    // Superadmin menghapus → baris hilang + sesi refresh dicabut.
+    const session = await prisma.session.create({
+      data: {
+        userId: victim.id,
+        refreshTokenHash: `hash-${Date.now()}`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    const removed = await agent()
+      .delete(`/api/v1/admin/users/${victim.id}`)
+      .set('Authorization', `Bearer ${saToken}`);
+    expect(removed.status).toBe(200);
+    expect(removed.body.data.deleted).toBe(true);
+    expect(await prisma.user.findUnique({ where: { id: victim.id } })).toBeNull();
+    expect(
+      await prisma.session.findUnique({ where: { id: session.id } }),
+    ).toBeNull();
+    // Jejak audit tersimpan (tanpa data sensitif).
+    const logged = await prisma.auditLog.findFirst({
+      where: { action: 'user.deleted_permanently', targetId: victim.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(logged).not.toBeNull();
+    expect(logged?.actorId).toBe(sa.id);
+    // Pengguna yang sudah tidak ada → 404.
+    const missing = await agent()
+      .delete(`/api/v1/admin/users/${victim.id}`)
+      .set('Authorization', `Bearer ${saToken}`);
+    expect(missing.status).toBe(404);
+  });
+
+  it('hapus permanen: Superadmin terakhir tidak boleh dihapus', async () => {
+    // Uji "superadmin terakhir" harus lepas dari sisa data tes lain: akun
+    // Superadmin lain diturunkan dulu ke ADMIN agar hanya tersisa satu.
+    await prisma.user.updateMany({
+      where: { role: Role.SUPERADMIN },
+      data: { role: Role.ADMIN },
+    });
+    const sa = await makeUser('lastsa', Role.SUPERADMIN);
+    const token = await loginAs(sa.email);
+    const res = await agent()
+      .delete(`/api/v1/admin/users/${sa.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error?.code).toBe('FORBIDDEN');
+    // Akun tetap ada (gagal aman — tidak ada penghapusan sebagian).
+    expect(await prisma.user.findUnique({ where: { id: sa.id } })).not.toBeNull();
+    expect(
+      await prisma.auditLog.findFirst({
+        where: { action: 'user.deleted_permanently', targetId: sa.id },
+      }),
+    ).toBeNull();
+  });
+
+  it('hapus permanen: Superadmin boleh menghapus dirinya sendiri bila ada Superadmin lain', async () => {
+    const sa = await makeUser('selfdel', Role.SUPERADMIN);
+    const other = await makeUser('selfdel2', Role.SUPERADMIN);
+    const token = await loginAs(sa.email);
+    const res = await agent()
+      .delete(`/api/v1/admin/users/${sa.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id: sa.id } })).toBeNull();
+    // Superadmin lain tidak terpengaruh, dan jejak audit tetap tersimpan
+    // setelah baris aktor dihapus. `audit_logs.actor_id` memakai
+    // ON DELETE SET NULL, jadi identitas aktor dibaca dari metadata.
+    expect(
+      await prisma.user.findUnique({ where: { id: other.id } }),
+    ).not.toBeNull();
+    const logged = await prisma.auditLog.findFirst({
+      where: { action: 'user.deleted_permanently', targetId: sa.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(logged?.actorId).toBeNull();
+    expect(logged?.metadata).toMatchObject({
+      role: 'SUPERADMIN',
+      actorEmail: sa.email,
+      actorRole: Role.SUPERADMIN,
+    });
+  });
+
   it('cohort: CRUD + enroll + my-enrollments milik sendiri', async () => {
     const admin = await makeUser('coadmin', Role.ADMIN);
     const token = await loginAs(admin.email);
@@ -271,6 +364,25 @@ describe('Tahap 3 users/cohorts/enrollment/impor (e2e)', () => {
     expect(res.body.error.message).toMatch(/500/);
   });
 
+  it('impor: berkas di atas 5 MB ditolak 413', async () => {
+    const admin = await makeUser('imp413', Role.ADMIN);
+    const token = await loginAs(admin.email);
+    // Batas ukuran multer (MAX_FILE_BYTES) menolak lebih dulu → 413.
+    const res = await agent()
+      .post('/api/v1/admin/users/import')
+      .set('Authorization', `Bearer ${token}`)
+      .attach(
+        'file',
+        Buffer.alloc(6 * 1024 * 1024, 0x41),
+        {
+          filename: 'besar.xlsx',
+          contentType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      );
+    expect(res.status).toBe(413);
+  });
+
   it('impor: file non-xlsx ditolak 415', async () => {
     const admin = await makeUser('impcsv', Role.ADMIN);
     const token = await loginAs(admin.email);
@@ -279,5 +391,24 @@ describe('Tahap 3 users/cohorts/enrollment/impor (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .attach('file', Buffer.from('a,b,c'), 'data.csv');
     expect(res.status).toBe(415);
+  });
+
+  it('impor: .xlsx palsu (mimetype & ekstensi beda) ditolak 415', async () => {
+    // Pengecekan tipe memakai AND: mimetype harus xlsx DAN ekstensi harus
+    // .xlsx. Berkas lain yang diubah namanya menjadi .xlsx tetap ditolak.
+    const admin = await makeUser('impfake', Role.ADMIN);
+    const token = await loginAs(admin.email);
+    // supertest menentukan mimetype dari nama, jadi isi .xlsx palsu ini
+    // dikirim dengan mimetype text/csv.
+    const renamed = await agent()
+      .post('/api/v1/admin/users/import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'multipart/form-data')
+      .attach('file', Buffer.from('a,b,c'), {
+        filename: 'palsu.xlsx',
+        contentType: 'text/csv',
+      });
+    expect(renamed.status).toBe(415);
+    expect(renamed.body.error.message).toMatch(/\.xlsx/);
   });
 });

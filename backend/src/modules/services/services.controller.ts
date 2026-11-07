@@ -25,6 +25,7 @@ import {
 } from './dto/services.dto';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, RequestUser } from '../auth/current-user.decorator';
+import { IdempotencyKey } from '../../common/idempotency-key.decorator';
 import { ok } from '../../common/envelope';
 
 @ApiBearerAuth()
@@ -131,12 +132,13 @@ export class ServicesController {
   @Post('certificates')
   @Roles(Role.ADMIN, Role.SUPERADMIN)
   @ApiTags('certificates')
-  @ApiOperation({ summary: 'Terbitkan sertifikat (syarat Opsi A)' })
+  @ApiOperation({ summary: 'Terbitkan sertifikat (syarat Opsi A, opsional idempotent)' })
   async issueCertificate(
     @CurrentUser() actor: RequestUser,
     @Body() dto: IssueCertificateDto,
+    @IdempotencyKey() idempotencyKey?: string,
   ) {
-    return ok(await this.certificates.issue(actor, dto));
+    return ok(await this.certificates.issue(actor, dto, idempotencyKey));
   }
 
   @Get('tickets')
@@ -155,12 +157,13 @@ export class ServicesController {
   @Post('tickets')
   @Roles(Role.TARUNA, Role.ADMIN, Role.SUPERADMIN)
   @ApiTags('tickets')
-  @ApiOperation({ summary: 'Buat tiket' })
+  @ApiOperation({ summary: 'Buat tiket (opsional idempotent)' })
   async createTicket(
     @CurrentUser() user: RequestUser,
     @Body() dto: CreateTicketDto,
+    @IdempotencyKey() idempotencyKey?: string,
   ) {
-    return ok(await this.tickets.create(user.id, dto));
+    return ok(await this.tickets.create(user.id, dto, idempotencyKey));
   }
 
   @Get('tickets/:id')

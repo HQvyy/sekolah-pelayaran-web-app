@@ -44,8 +44,9 @@ export function AssessmentListPage() {
         <h1>Asesmen Level 1 sampai 5</h1>
         <p className="muted">
           Daftar assessment sesuai enrollment dan aturan unlock dari backend. Aturan passing grade
-          70, maksimal 3 attempt, jeda 24 jam, dan remedial masih perlu konfirmasi dan tidak
-          ditampilkan sebagai aturan final.
+          70 (default konfigurasi, dapat diubah lewat PASSING_GRADE), maksimal 3 attempt, dan jeda
+          24 jam antara attempt masih bersifat konfigurasi sementara — remedial belum ditentukan
+          dan tidak ditampilkan sebagai aturan final.
         </p>
         <form
           className="form"

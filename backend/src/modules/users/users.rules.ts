@@ -25,6 +25,8 @@ export const USER_AUDIT_ACTIONS = {
   USER_VERIFIED: 'user.verified',
   USER_STATUS_CHANGED: 'user.status_changed',
   USER_ROLE_CHANGED: 'user.role_changed',
+  // Penghapusan permanen (hard delete) oleh Superadmin — PRD §9.
+  USER_DELETED_PERMANENTLY: 'user.deleted_permanently',
   USER_CREATED_BY_ADMIN: 'user.created_by_admin',
   TARUNA_IMPORTED: 'user.taruna_imported',
   COHORT_CREATED: 'cohort.created',

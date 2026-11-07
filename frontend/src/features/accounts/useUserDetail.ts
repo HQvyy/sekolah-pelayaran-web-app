@@ -12,41 +12,61 @@ interface DetailState {
   reload: () => void;
 }
 
+// Status permintaan detail: satu state alih-alih loading/error/forbidden
+// terpisah yang harus di-reset manual (react/set-state-in-effect).
+type DetailRequest =
+  | { kind: "loading" }
+  | { kind: "ready"; detail: AdminUser }
+  | {
+      kind: "error";
+      error: { message: string; kind: "forbidden" | "generic" };
+    };
+
 export function useUserDetail(userId: string): DetailState {
   const accessToken = useAccessToken();
-  const [detail, setDetail] = useState<AdminUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [forbidden, setForbidden] = useState(false);
+  const [request, setRequest] = useState<DetailRequest>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
     async function load() {
+      setRequest({ kind: "loading" });
       if (!accessToken) {
-        setLoading(false);
-        setError("Sesi berakhir. Silakan masuk kembali.");
+        setRequest({
+          kind: "error",
+          error: {
+            message: "Sesi berakhir. Silakan masuk kembali.",
+            kind: "generic",
+          },
+        });
         return;
       }
-      setLoading(true);
-      setError("");
-      setForbidden(false);
       try {
         const result = await getUser(userId, accessToken);
         if (!active) return;
-        setDetail(result.data);
+        setRequest({ kind: "ready", detail: result.data });
       } catch (requestError) {
         if (!active) return;
         if (requestError instanceof ApiError && requestError.status === 403) {
-          setForbidden(true);
-          setError("Akun ini tidak memiliki akses. Otorisasi resmi ditentukan backend.");
+          setRequest({
+            kind: "error",
+            error: {
+              message:
+                "Akun ini tidak memiliki akses. Otorisasi resmi ditentukan backend.",
+              kind: "forbidden",
+            },
+          });
         } else if (requestError instanceof ApiError) {
-          setError(requestError.message);
+          setRequest({
+            kind: "error",
+            error: { message: requestError.message, kind: "generic" },
+          });
         } else {
-          setError("Tidak dapat menghubungi server.");
+          setRequest({
+            kind: "error",
+            error: { message: "Tidak dapat menghubungi server.", kind: "generic" },
+          });
         }
-      } finally {
-        if (active) setLoading(false);
       }
     }
     void load();
@@ -56,10 +76,10 @@ export function useUserDetail(userId: string): DetailState {
   }, [userId, accessToken, reloadKey]);
 
   return {
-    detail,
-    loading,
-    error,
-    forbidden,
+    detail: request.kind === "ready" ? request.detail : null,
+    loading: request.kind === "loading",
+    error: request.kind === "error" ? request.error.message : "",
+    forbidden: request.kind === "error" && request.error.kind === "forbidden",
     reload: () => setReloadKey((value) => value + 1),
   };
 }

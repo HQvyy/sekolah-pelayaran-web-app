@@ -1,6 +1,7 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  GoneException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -105,6 +106,26 @@ describe('AllExceptionsFilter', () => {
         message: 'DB down.',
         details: [],
         requestId: 'req-503',
+      },
+    });
+  });
+
+  it('memetakan 410 (Gone) ke GONE, bukan VALIDATION_ERROR', () => {
+    // 410 dipakai untuk OTP kedaluwarsa / token reset habis masa pakai —
+    // memetakannya ke VALIDATION_ERROR membuat klien salah menangani.
+    const host = hostWith({ requestId: 'req-gone' });
+    filter.catch(new GoneException('Kode OTP kedaluwarsa.'), host);
+    const res = host.switchToHttp().getResponse() as {
+      status: jest.Mock;
+    };
+    const json = res.status.mock.results[0].value.json as jest.Mock;
+    expect(res.status).toHaveBeenCalledWith(410);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        code: ErrorCode.GONE,
+        message: 'Kode OTP kedaluwarsa.',
+        details: [],
+        requestId: 'req-gone',
       },
     });
   });

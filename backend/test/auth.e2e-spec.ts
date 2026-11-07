@@ -150,6 +150,48 @@ describe('Auth Tahap 2 (e2e)', () => {
     expect(cookies.join(';').toLowerCase()).toContain('httponly');
   });
 
+  it('cookie refresh: HttpOnly + SameSite=Lax + Path + Max-Age sesuai TTL', async () => {
+    const user = await makeUser('cookie');
+    const res = await loginAndVerify(user.email);
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const refresh = cookies.find((item) => item.startsWith('spli_refresh='));
+    expect(refresh).toBeDefined();
+    const header = (refresh ?? '').toLowerCase();
+    expect(header).toContain('httponly');
+    expect(header).toContain('samesite=lax');
+    expect(header).toContain('path=/api/v1/auth');
+    // Max-Age harus sama dengan REFRESH_TTL_DAYS (30 hari = 2592000 detik).
+    const maxAge = /max-age=(\d+)/.exec(header);
+    expect(maxAge).not.toBeNull();
+    expect(Number(maxAge?.[1])).toBe(30 * 24 * 60 * 60);
+    // NODE_ENV test → Secure tidak dipasang (diaktifkan di production).
+    expect(header).not.toContain('secure');
+    // Nilai token tidak bocor ke body.
+    expect(JSON.stringify(res.body)).not.toContain(refresh ?? 'x');
+  });
+
+  it('OTP kedaluwarsa (TTL 5 menit) → ditolak 410', async () => {
+    const user = await makeUser('otpexp');
+    const login = await agent().post('/api/v1/auth/login').send({
+      email: user.email,
+      password: 'Rahasia123',
+    });
+    const challengeId = login.body.data.challengeId as string;
+    const code = fakeEmail.lastOtpFor(user.email);
+    expect(code).toBeDefined();
+    // Mundurkan waktu kedaluwarsa challenge melewati TTL.
+    await prisma.otpChallenge.updateMany({
+      where: { id: challengeId },
+      data: { expiresAt: new Date(Date.now() - 60 * 1000) },
+    });
+    const res = await agent().post('/api/v1/auth/2fa/verify').send({
+      challengeId,
+      code,
+    });
+    expect(res.status).toBe(410);
+    expect(res.body.error.code).toBe('GONE');
+  });
+
   it('verify: OTP salah → 401', async () => {
     const user = await makeUser('otpsalah');
     const login = await agent().post('/api/v1/auth/login').send({
@@ -327,6 +369,40 @@ describe('Auth Tahap 2 (e2e)', () => {
     const login = await agent().post('/api/v1/auth/login').send({
       email: user.email,
       password: 'Baru1234',
+    });
+    expect(login.status).toBe(200);
+  });
+
+  it('reset: token kedaluwarsa (TTL 60 menit) ditolak 410', async () => {
+    const user = await makeUser('resetexp');
+    await agent().post('/api/v1/auth/password/forgot').send({
+      email: user.email,
+    });
+    const sent = fakeEmail.sent.filter(
+      (item) => item.kind === 'password-reset' && item.to === user.email,
+    );
+    const raw = sent[sent.length - 1].body.split('token=')[1];
+    expect(raw).toBeDefined();
+    // Mundurkan masa berlaku token melewati TTL 60 menit.
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { expiresAt: new Date(Date.now() - 61 * 60 * 1000) },
+    });
+    const res = await agent().post('/api/v1/auth/password/reset').send({
+      token: raw,
+      newPassword: 'Baru1234',
+    });
+    expect(res.status).toBe(410);
+    // Token kedaluwarsa tidak menghapus/tidak dapat dipakai lagi.
+    const again = await agent().post('/api/v1/auth/password/reset').send({
+      token: raw,
+      newPassword: 'Lagi1234',
+    });
+    expect(again.status).toBe(410);
+    // Password lama masih berlaku (reset gagal sepenuhnya).
+    const login = await agent().post('/api/v1/auth/login').send({
+      email: user.email,
+      password: 'Rahasia123',
     });
     expect(login.status).toBe(200);
   });

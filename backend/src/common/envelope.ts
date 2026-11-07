@@ -14,6 +14,10 @@ export enum ErrorCode {
   RATE_LIMITED = 'RATE_LIMITED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  // 410 Gone: challenge/token sudah tidak berlaku (OTP kedaluwarsa, token
+  // reset habis masa pakai, token sekali pakai sudah dipakai). Tanpa kode
+  // khusus, 110 status ini jatuh ke VALIDATION_ERROR yang menyesatkan.
+  GONE = 'GONE',
 }
 
 export interface ErrorDetail {

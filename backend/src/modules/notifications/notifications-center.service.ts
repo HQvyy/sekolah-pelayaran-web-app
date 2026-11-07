@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { NotificationKind } from '@prisma/client';
+import { NotificationKind, Role } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { EmailService } from '../notifications/email.service';
 
@@ -87,6 +87,83 @@ export class NotificationsCenter {
       NotificationKind.SCHEDULE_CANCELLED,
       `Kelas dibatalkan: ${notice.title}`,
       `Jadwal ${notice.startsAt.toISOString()} dibatalkan.`,
+    );
+  }
+
+  // Notifikasi langsung ke daftar penerima tertentu (bukan satu cohort).
+  private async notify(
+    recipients: { id: string; email: string }[],
+    kind: NotificationKind,
+    title: string,
+    body: string,
+    emailKind: string,
+  ): Promise<void> {
+    if (recipients.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: recipients.map((user) => ({
+        userId: user.id,
+        kind,
+        title,
+        body,
+      })),
+    });
+    for (const user of recipients) {
+      try {
+        await this.email.sendScheduleChange({
+          to: user.email,
+          title,
+          detail: body,
+        });
+      } catch {
+        // Email gagal tidak menggagalkan aksi bisnis; in-app tetap tercatat.
+        // `emailKind` dicatat agar pengembangan bisa membedakan sumber panggilan.
+        void emailKind;
+      }
+    }
+  }
+
+  // Esai melewati SLA 7 hari (PRD §4.4): semua Admin/Superadmin aktif diberi
+  // tahu in-app agar penilaian tertunda tidak hilang dari pantauan.
+  async essayOverdue(detail: {
+    level: number;
+    assessmentId: string;
+    attemptId: string;
+    submittedAt: Date;
+  }): Promise<void> {
+    const admins = await this.prisma.user.findMany({
+      where: {
+        role: { in: [Role.ADMIN, Role.SUPERADMIN] },
+        status: 'ACTIVE',
+      },
+      select: { id: true, email: true },
+    });
+    await this.notify(
+      admins,
+      NotificationKind.ESSAY_OVERDUE,
+      `Penilaian esai terlambat: level ${detail.level}`,
+      `Attempt ${detail.attemptId} (assessment ${detail.assessmentId}) ` +
+        `dikirim ${detail.submittedAt.toISOString()} dan melewati SLA 7 hari.`,
+      'essay-overdue',
+    );
+  }
+
+  // Sertifikat terbit: pemilik diberi tahu in-app + email.
+  async certificateIssued(detail: {
+    userId: string;
+    number: string;
+    cohortName: string;
+  }): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: detail.userId },
+      select: { id: true, email: true, status: true },
+    });
+    if (!user || user.status !== 'ACTIVE') return;
+    await this.notify(
+      [user],
+      NotificationKind.CERTIFICATE_ISSUED,
+      'Sertifikat diterbitkan',
+      `Sertifikat ${detail.number} untuk ${detail.cohortName} siap diunduh.`,
+      'certificate-issued',
     );
   }
 }

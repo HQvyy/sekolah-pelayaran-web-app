@@ -229,4 +229,61 @@ export class UsersService {
     });
     return updated;
   }
+
+  // Penghapusan permanen (hard delete) — HANYA Superadmin dan SELALU tercatat
+  // di audit log (PRD §9: "penghapusan permanen hanya oleh Superadmin dan
+  // tercatat di audit log"). Penghapusan biasa tetap soft (status SUSPENDED
+  // / cohort nonaktif); endpoint ini untuk permintaan hapus data pribadi yang
+  // disetujui, bukan alat administratif sehari-hari.
+  //
+  // Relasi turunan ikut terhapus melalui ON DELETE CASCADE pada skema; yang
+  // tidak di-cascade (verified_by) di-set NULL oleh database. Sesi refresh
+  // dicabut lebih dulu agar token lama tidak lolos setelah akun hilang.
+  //
+  // Audit log ditulis SEBELUM baris pengguna dihapus agar penghapusan tetap
+  // meninggalkan jejak bila langkah hapus sesudahnya gagal. Perlu dicatat:
+  // `audit_logs.actor_id` memakai ON DELETE SET NULL pada skema, jadi ketika
+  // aktor menghapus dirinya sendiri database akan men-NULL-kan `actor_id`
+  // — memindahkan pemanggilan ini tidak mencegah hal itu. Karena itu identitas
+  // aktor juga disalin ke `metadata.actorEmail`/`actorRole` supaya pelaku
+  // tetap dapat diidentifikasi setelah barisnya hilang. Verifikasi e2e:
+  // skenario "Superadmin menghapus dirinya sendiri".
+  async deletePermanently(userId: string, actorId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true, status: true },
+    });
+    if (!user) throw new NotFoundException('Pengguna tidak ditemukan.');
+    if (user.role === Role.SUPERADMIN) {
+      const remaining = await this.prisma.user.count({
+        where: { role: Role.SUPERADMIN, id: { not: userId } },
+      });
+      if (remaining === 0) {
+        throw new ForbiddenException(
+          'Superadmin terakhir tidak dapat dihapus permanen.',
+        );
+      }
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, email: true, role: true },
+    });
+    await this.audit.record(USER_AUDIT_ACTIONS.USER_DELETED_PERMANENTLY, {
+      actorId,
+      targetId: userId,
+      // Hanya identitas non-sensitif dicatat — tanpa hash/password/token.
+      // `actorEmail`/`actorRole` menjaga identitas pelaku tetap terbaca
+      // meski `actor_id` di-NULL-kan saat aktor menghapus dirinya sendiri.
+      metadata: {
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        actorEmail: actor?.email ?? null,
+        actorRole: actor?.role ?? null,
+      },
+    });
+    await this.prisma.session.deleteMany({ where: { userId } });
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { deleted: true };
+  }
 }

@@ -11,6 +11,7 @@ import {
   Query,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -31,6 +32,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ProgressService } from '../services/progress.service';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, RequestUser } from '../auth/current-user.decorator';
+import { UploadThrottleGuard } from '../../common/throttle/upload-throttle.guard';
 import { ok } from '../../common/envelope';
 import { IMPORT_RULES } from './users.rules';
 import {
@@ -129,9 +131,24 @@ export class UsersController {
     return ok(await this.users.updateRole(userId, dto.role, actor.id));
   }
 
+  // Penghapusan permanen: Superadmin saja + tercatat di audit log (PRD §9).
+  // Bukan pengganti soft delete (status SUSPENDED) — hanya untuk permintaan
+  // hapus data pribadi yang disetujui.
+  @Delete(':userId')
+  @Roles(Role.SUPERADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Hapus permanen akun (Superadmin, diaudit)' })
+  async deletePermanently(
+    @Param('userId') userId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return ok(await this.users.deletePermanently(userId, actor.id));
+  }
+
   @Post('import')
   @HttpCode(HttpStatus.OK)
   @Roles(Role.SUPERADMIN, Role.ADMIN)
+  @UseGuards(UploadThrottleGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),

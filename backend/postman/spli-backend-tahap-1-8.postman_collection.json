@@ -350,6 +350,19 @@
             ],
             "url": "{{baseUrl}}/api/v1/admin/users/imports/:importId/errors"
           }
+        },
+        {
+          "name": "DELETE user (permanent, Superadmin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/users/:userId"
+          }
         }
       ]
     },
@@ -804,6 +817,10 @@
                 "value": "application/json"
               },
               {
+                "key": "Idempotency-Key",
+                "value": "autosave-{{attemptId}}-{{questionId}}-1"
+              },
+              {
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}"
               }
@@ -953,6 +970,10 @@
                 "value": "application/json"
               },
               {
+                "key": "Idempotency-Key",
+                "value": "cert-{{userId}}-{{cohortId}}-1"
+              },
+              {
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}"
               }
@@ -985,6 +1006,10 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "ticket-1"
               },
               {
                 "key": "Authorization",

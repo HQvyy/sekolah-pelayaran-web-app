@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useUserDetail } from "./useUserDetail.ts";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../services/apiClient.ts";
@@ -273,20 +273,35 @@ export function UserDetailPage({ userId }: { userId: string }) {
   const accessToken = useAccessToken();
   const { user } = useSession();
   const { detail, loading, error, forbidden, reload } = useUserDetail(userId);
-  const [status, setStatus] = useState<AccountStatus>("ACTIVE");
-  const [role, setRole] = useState<UserRole>("TARUNA");
+  const canEdit = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  // Form mengikuti data server: nilai awal dihitung saat render, bukan
+  // disalin lewat efek (react/set-state-in-effect). Setelah reload, form
+  // sengaja TIDAK direset agar perubahan yang sedang diketik tidak hilang
+  // (kunci form = id pengguna yang sedang dibuka).
+  const formKey = detail?.id ?? "";
+  const [form, setForm] = useState(() => ({
+    key: "",
+    status: "ACTIVE" as AccountStatus,
+    role: "TARUNA" as UserRole,
+  }));
+  const status =
+    form.key === formKey && detail
+      ? form.status
+      : detail?.status ?? "ACTIVE";
+  const role =
+    form.key === formKey && detail ? form.role : detail?.role ?? "TARUNA";
   const [fieldErrorMap, setFieldErrorMap] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const canEdit = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
 
-  useEffect(() => {
-    if (detail) {
-      setStatus(detail.status);
-      setRole(detail.role);
-    }
-  }, [detail]);
+  function setStatus(next: AccountStatus) {
+    setForm({ key: formKey, status: next, role });
+  }
+
+  function setRole(next: UserRole) {
+    setForm({ key: formKey, status, role: next });
+  }
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();

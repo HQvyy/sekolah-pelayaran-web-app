@@ -3,11 +3,14 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ProgressStatus, Role } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsCenter } from '../notifications/notifications-center.service';
 import { CertificatePdfService } from './certificate-pdf.service';
+import { checkIdempotency, payloadHash } from '../../common/idempotency';
 import { SERVICE_AUDIT_ACTIONS, SERVICE_RULES } from './services.rules';
 
 export interface CertificateActor {
@@ -21,6 +24,7 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
     private readonly pdf: CertificatePdfService,
     private readonly audit: AuditService,
+    private readonly notices: NotificationsCenter,
   ) {}
 
   // Syarat Opsi A (keputusan Tahap 7): seluruh level 1–5 PASSED pada cohort
@@ -28,9 +32,27 @@ export class CertificatesService {
   async issue(
     actor: CertificateActor,
     input: { userId: string; cohortId: string; fullName: string },
+    idempotencyKey?: string,
   ) {
     if (actor.role !== Role.SUPERADMIN && actor.role !== Role.ADMIN) {
       throw new ForbiddenException('Tidak memiliki izin penerbitan.');
+    }
+    // Idempotency: key sama + payload sama → sertifikat pertama di-replay.
+    if (idempotencyKey) {
+      const existing = await this.prisma.certificate.findFirst({
+        where: { createdBy: actor.id, idempotencyKey },
+      });
+      const match = checkIdempotency(existing, idempotencyKey, {
+        userId: input.userId,
+        cohortId: input.cohortId,
+        fullName: input.fullName,
+      });
+      if (match.conflict) {
+        throw new ConflictException(
+          'Idempotency-Key sudah dipakai dengan isi permintaan yang berbeda.',
+        );
+      }
+      if (match.replay) return match.replay;
     }
     const user = await this.prisma.user.findUnique({
       where: { id: input.userId },
@@ -50,10 +72,11 @@ export class CertificatesService {
     const levels = await this.prisma.assessment.count({
       where: { cohortId: input.cohortId },
     });
-    // MVP: 5 level. Bila cohort memiliki <5 assessment, syarat belum terpenuhi
-    // (tidak menerbitkan sebagian tanpa persetujuan).
+    // Syarat kelulusan belum terpenuhi = business rule gagal (bukan konflik
+    // status) → 422 UNPROCESSABLE_ENTITY sesuai keputusan pengguna (opsi C).
+    // Duplikat sertifikat di bawah tetap 409 (konflik data).
     if (levels < 5 || passed < 5) {
-      throw new ConflictException(
+      throw new UnprocessableEntityException(
         'Syarat kelulusan belum terpenuhi (seluruh level 1–5 harus PASSED).',
       );
     }
@@ -84,12 +107,25 @@ export class CertificatesService {
         number,
         fullName: input.fullName,
         createdBy: actor.id,
+        idempotencyKey: idempotencyKey ?? null,
+        idempotencyPayload: idempotencyKey
+          ? payloadHash({
+              userId: input.userId,
+              cohortId: input.cohortId,
+              fullName: input.fullName,
+            })
+          : null,
       },
     });
     await this.audit.record(SERVICE_AUDIT_ACTIONS.CERTIFICATE_ISSUED, {
       actorId: actor.id,
       targetId: certificate.id,
       metadata: { number, userId: input.userId, cohortId: input.cohortId },
+    });
+    await this.notices.certificateIssued({
+      userId: input.userId,
+      number,
+      cohortName: cohort.name,
     });
     return certificate;
   }

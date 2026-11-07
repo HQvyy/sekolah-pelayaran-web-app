@@ -221,6 +221,28 @@ describe('Tahap 4 konten + Bunny (e2e)', () => {
     expect(huge.status).toBe(413);
   });
 
+  it('thumbnail: 1920x1080 (batas maksimal) diterima; di atas batas ditolak', async () => {
+    const seed = await seedPublishedChain();
+    const max = await agent()
+      .post(`/api/v1/materials/${seed.material.id}/thumbnail`)
+      .set('Authorization', `Bearer ${seed.token}`)
+      .attach('file', pngBuffer(1920, 1080), 'thumb-max.png');
+    expect(max.status).toBe(200);
+    expect(max.body.data.width).toBe(1920);
+    expect(max.body.data.height).toBe(1080);
+    // 1921 px melewati batas maksimal → 400 (dicek sebelum penyimpanan).
+    const tooWide = await agent()
+      .post(`/api/v1/materials/${seed.material.id}/thumbnail`)
+      .set('Authorization', `Bearer ${seed.token}`)
+      .attach('file', pngBuffer(1921, 1080), 'thumb-lewat.png');
+    expect(tooWide.status).toBe(400);
+    const tooTall = await agent()
+      .post(`/api/v1/materials/${seed.material.id}/thumbnail`)
+      .set('Authorization', `Bearer ${seed.token}`)
+      .attach('file', pngBuffer(1920, 1081), 'thumb-tinggi.png');
+    expect(tooTall.status).toBe(400);
+  });
+
   it('provider belum dikonfigurasi → gagal aman 503 (bukan token palsu)', async () => {
     const { BunnyService } = await import('../src/modules/videos/bunny.service');
     const { FakeBunnyProvider } = await import(

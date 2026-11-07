@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -19,6 +20,7 @@ import {
 import { memoryStorage } from 'multer';
 import { ContentService } from './content.service';
 import { CurrentUser, RequestUser } from '../auth/current-user.decorator';
+import { UploadThrottleGuard } from '../../common/throttle/upload-throttle.guard';
 import { CONTENT_RULES } from './content.rules';
 
 interface PngDimensions {
@@ -80,6 +82,7 @@ export class ThumbnailController {
 
   @Post('materials/:materialId/thumbnail')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(UploadThrottleGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),

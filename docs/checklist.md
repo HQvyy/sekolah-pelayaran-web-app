@@ -35,7 +35,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [~] Konflik status → `409 CONFLICT`; business rule gagal → `422 UNPROCESSABLE` — 409 dites: rating duplikat, sertifikat duplikat, transisi tiket ilegal, join kelas dibatalkan; **422 belum ada test eksplisit** (edit rating kelebihan batas dijawab 409 — lihat §9)
 - [~] Pagination: `page` default 1, `pageSize` default 20 **maks 100**, `sortBy` hanya dari allowlist, `sortOrder` hanya `asc|desc` — kode: `PaginationQueryDto` (`@Max(100)`, default 20) + allowlist `USER_SORTABLE_FIELDS` di `users.service.ts`; e2e baru users list yang dites paginasi
 - [x] Setiap respons membawa `X-Request-Id`; error body memuat `requestId` — `RequestIdMiddleware` global + `AllExceptionsFilter`; dites foundation (404 envelope + requestId) dan smoke production (tiap request ber-requestId)
-- [~] `Idempotency-Key` didukung di: `PUT .../answers/{questionId}`, `POST .../attempts/{id}/submit`, `POST /tickets`, `POST /certificates` (ulang key+payload sama → hasil pertama; payload beda → `409`) — **hanya submit attempt** yang menerapkannya (`dto.idempotencyKey`, replay idempotent dites di suite cbt); 3 endpoint lain belum menerapkan
+- [x] `Idempotency-Key` didukung di: `PUT .../answers/{questionId}`, `POST .../attempts/{id}/submit`, `POST /tickets`, `POST /certificates` (ulang key+payload sama → hasil pertama; payload beda → `409`) — keempatnya menerapkan (`src/common/idempotency.ts` + `@IdempotencyKey()`); e2e: autosave mereplikasi jawaban, isi beda → `409`; submit attempt idempotent; tiket & sertifikat memakai kolom `idempotencyKey`/`idempotencyPayload` (migrasi `20261107062759_add_idempotency_keys`)
 - [~] Rate limit menjawab `429 RATE_LIMITED` sesuai nilai terkunci (login 10/mnt/IP, OTP verify 10/mnt/challenge, resend 1/60 dtk + 5/jam, forgot 5/jam/email, refresh 30/mnt/IP, impor/upload 10/jam/user) — `ThrottlerGuard` global + `AuthThrottle` terpasang di 5 endpoint auth; nilai dikunci; **belum ada test 429** (throttle dilonggarkan ke 10000 di `NODE_ENV=test`), dan **impor/upload belum ber-throttle**
 - [x] Integrasi database nyata (constraint, FK, transaksi) — e2e berjalan di PostgreSQL nyata; constraint ditegakkan (mis. `@@unique([userId, cohortId])`, `@@unique([attemptId, questionId])`, `@@unique([lessonId, userId])`); operasi majemuk memakai transaksi
 
@@ -43,13 +43,13 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 
 - [x] Registrasi mandiri hanya Taruna + consent PDP tercatat — e2e: register menghasilkan akun `PENDING` + consent tercatat
 - [x] Login benar → `OTP_REQUIRED` + `challengeId` + `expiresAt`, **tanpa access token** sebelum OTP valid — e2e auth (login mengembalikan `OTP_REQUIRED` tanpa token)
-- [~] OTP: 6 digit, kedaluwarsa 5 menit, maksimal 5 percobaan per kode — 6 digit + maks 5 percobaan dites (percobaan ke-5 → `410 EXHAUSTED`); **kedaluwarsa 5 menit tidak dites langsung** (kode: `OTP_MAX_ATTEMPTS=5` di `auth.rules.ts`); UAT skenario 1 menutup sisa verifikasi manual
-- [~] OTP salah / kedaluwarsa / habis attempt → pesan sesuai (UAT skenario 1) — e2e: OTP benar & salah, 5× salah → `410 EXHAUSTED`; **kedaluwarsa belum dites langsung** — ditutup UAT skenario 1
+- [x] OTP: 6 digit, kedaluwarsa 5 menit, maksimal 5 percobaan per kode — 6 digit + maks 5 percobaan dites (percobaan ke-5 → `410 EXHAUSTED`); **kedaluwarsa 5 menit kini dites langsung** (mundurkan `expiresAt` → `410 GONE`); kode: `OTP_MAX_ATTEMPTS=5`, `OTP_TTL_MINUTES=5` di `auth.rules.ts`
+- [x] OTP salah / kedaluwarsa / habis attempt → pesan sesuai — e2e: OTP benar, OTP salah (401), 5× salah → `410`, **kedaluwarsa → `410 GONE`** (kode error `GONE` baru di `envelope.ts`); pesan spesifik per kasus (challenge tidak berlaku / kedaluwarsa / percobaan habis)
 - [x] Resend OTP: throttle maksimal 1× per 60 detik, cooldown tampil di UI — e2e: resend < 60 dtk → `403`; `@AuthThrottle` resend terpasang; cooldown UI di UAT skenario 1
 - [x] 5 login gagal berturut-turut → lock 15 menit — e2e auth
 - [x] 3 kegagalan kirim email berturut-turut → lock 15 menit + audit log — e2e: email gagal 3× → lock + audit
 - [x] Password minimal 8 karakter kombinasi huruf + angka — e2e: password lemah ditolak
-- [~] Reset password: tautan email sekali pakai, kedaluwarsa 1 jam, token tak bisa dipakai ulang — e2e: reset sekali pakai (pemakaian ulang ditolak); **kedaluwarsa 1 jam lewat kode, belum dites langsung**
+- [x] Reset password: tautan email sekali pakai, kedaluwarsa 1 jam, token tak bisa dipakai ulang — e2e: reset sekali pakai (pemakaian ulang ditolak); **kedaluwarsa 1 jam kini dites langsung** (mundurkan `expiresAt` 61 menit → `410 GONE`, password lama tetap berlaku)
 - [x] Respons forgot-password **tidak membocorkan** apakah email terdaftar — e2e: forgot anti-enumerasi (respons seragam)
 - [~] Access token Bearer ≤ 1 jam; refresh cookie `HttpOnly + Secure + SameSite=Lax` ≤ 30 hari — kode: `auth.controller.ts` menetapkan cookie `{ httpOnly, secure, sameSite: 'lax' }`; e2e hanya meng-assert `spli_refresh` + `httponly` — **Secure/SameSite/max-age ≤ 30 hari belum di-assert test**
 - [x] Refresh rotation sekali pakai: reuse refresh lama → ditolak + revoke — e2e auth
@@ -66,8 +66,8 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [~] Template kolom v1: `nama_lengkap*, email*, nomor_identitas*, cohort_kode*, telepon, tanggal_lahir(YYYY-MM-DD)` — e2e memverifikasi unduhan template, **detail kolom v1 tidak di-assert satu per satu**
 - [x] Strategi berhasil sebagian: baris valid masuk, baris gagal dilaporkan — e2e: impor sebagian 1/3 + log eror
 - [x] Unduh log eror `.xlsx` dengan sel eror ditandai + `keterangan_eror` per baris — e2e: log eror xlsx tersedia
-- [~] Validasi MIME + isi file di server (bukan ekstensi saja), nama file aman — e2e: non-xlsx → `415` (validasi tipe); **bukti validasi isi/MIME nyata + sanitasi nama file belum di-assert**
-- [~] Batas ukuran file → `413 PAYLOAD_TOO_LARGE`; tipe salah → `415` — `415` dites; **`413` tidak dites** (ada middleware limit, belum diuji khusus)
+- [x] Validasi MIME + isi file di server (bukan ekstensi saja), nama file aman — `src/common/uploads.ts`: mimetype **DAN** ekstensi harus `.xlsx` (validasi AND; sebelumnya OR sehingga `.csv`/`.gif` yang diubah namanya lolos). Nama berkas disanitasi (`[A-Za-z0-9._-]`, tanpa path, dibatasi 255 karakter) sebelum dicatat/diunduh. e2e: `.xlsx` palsu (mimetype `text/csv`) → `415`; unit test `uploads.spec.ts` 10 kasus
+- [x] Batas ukuran file → `413 PAYLOAD_TOO_LARGE`; tipe salah → `415` — keduanya dites: berkas > 5 MB → `413`; `.csv` dan `.xlsx` palsu → `415`
 - [ ] Rate limit impor 10/jam/user — **belum diterapkan** (tidak ada `@Throttle` di endpoint impor) dan belum dites
 
 ## 5. Cohort & enrollment (api-spec §4)
@@ -124,8 +124,8 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [x] Progres/unlock dihitung server; nilai progres dari client diabaikan — e2e: user progress dites; perhitungan di server, payload klien tak dipakai
 - [x] Unlock level berikutnya hanya jika attempt `GRADED` dengan skor ≥ passing grade — logika di `grading.service.ts`/progress; verifikasi menyeluruh lewat alur UAT
 - [x] Rating 1–5, non-anonim, hanya Taruna dengan enrollment aktif pada cohort kelas — e2e: non-peserta `403`, Taruna lain `404`; rating duplikat `409`
-- [~] Edit rating maksimal 1× dalam 7 hari sejak rating pertama; kelebihan → `422` — edit dibatasi 1× (`ConflictException 'Rating hanya dapat diedit satu kali.'`) dan batas 7 hari (kode); **status yang dikembalikan `409`, bukan `422` sesuai spec** — perlu keputusan/penyesuaian
-- [x] Sertifikat terbit **hanya** bila seluruh level 1–5 `PASSED` pada cohort sama (Opsi A — keputusan Tahap 7) — e2e: lulus 5 level → `201`; sebelumnya `409`
+- [x] Edit rating maksimal 1× dalam 7 hari sejak rating pertama; kelebihan → `422` — **keputusan (Opsi C): duplikat = `409 CONFLICT`, kelebihan batas edit = `422 UNPROCESSABLE`**; `ratings.service.ts` membedakan keduanya, diuji e2e
+- [x] Sertifikat terbit **hanya** bila seluruh level 1–5 `PASSED` pada cohort sama (Opsi A — keputusan Tahap 7) — e2e: lulus 5 level → `201`; **syarat belum terpenuhi → `422 UNPROCESSABLE`** (Opsi C), duplikat tetap `409`
 - [x] Nomor sertifikat unik dibuat server-side dan stabil (tidak berubah saat PDF diunduh ulang); cek duplikat — e2e: nomor ber-prefix `SPLI-`, duplikat → `409`
 - [~] PDF memuat disclaimer "bukan sertifikat resmi STCW" — **cek visual** (ekstraksi otomatis tidak layak) — e2e: PDF dihasilkan (`%PDF-`, > 1000 B); disclaimer **dicek visual saat UAT** (PDFKit subset font tanpa ToUnicode; ekstraksi teks tidak layak — komentar ada di test)
 - [x] Unduhan PDF memeriksa hak akses; bukan URL publik permanen — e2e: outsider `404`; unduhan lewat endpoint berautentikasi
@@ -133,7 +133,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 
 ## 10. Ticketing (api-spec §11)
 
-- [~] Status terkunci: `OPEN → IN_PROGRESS → RESOLVED → CLOSED`; reopen `RESOLVED→IN_PROGRESS` dan `CLOSED→IN_PROGRESS` oleh Admin; transisi lain → `422` — e2e: transisi ilegal ditolak (`409`); **dikembalikan `409` bukan `422` sesuai spec** (pola sama seperti §9)
+- [~] Status terkunci: `OPEN → IN_PROGRESS → RESOLVED → CLOSED`; reopen `RESOLVED→IN_PROGRESS` dan `CLOSED→IN_PROGRESS` oleh Admin; transisi lain → `422` — e2e: transisi ilegal ditolak (`409`); **keputusan (Opsi C): transisi ilegal tetap `409`** — disepakati agar konsisten dengan duplikat/konflik; status 422 disediakan untuk business rule (lihat §9)
 - [x] Taruna hanya melihat tiket milik sendiri; tiket orang lain → `403` — e2e: tiket milik sendiri OK; hak lain ditolak
 - [x] Hanya Admin yang menjadi petugas support (Mentor bukan support) — e2e: Mentor `403` pada tiket
 - [x] Setiap perubahan status tercatat di ticket history/audit trail — e2e: riwayat tiket tersedia (`/tickets/:id/history`)
@@ -141,24 +141,24 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 
 ## 11. Notifikasi & audit log (api-spec §12)
 
-- [~] Event minimum terkirim: OTP, reset password, perubahan/pembatalan Live Lesson (email + in-app), esai lewat SLA (lapor Admin), penerbitan sertifikat — terpasang: OTP, reset password, Live Lesson (in-app `createMany` + email via `NotificationsCenter`). **Belum terpasang**: notifikasi esai lewat SLA ke Admin dan penerbitan sertifikat (enum `ESSAY_OVERDUE`/`CERTIFICATE_ISSUED` ada di skema tetapi tidak dipakai kode — hanya tercatat di audit). Email real belum aktif (`EMAIL_PROVIDER=fake`)
+- [~] Event minimum terkirim: OTP, reset password, perubahan/pembatalan Live Lesson (email + in-app), esai lewat SLA (lapor Admin), penerbitan sertifikat — terpasang: OTP, reset password, Live Lesson (in-app `createMany` + email via `NotificationsCenter`), **esai lewat SLA → Admin** (`notifyEssayOverdue`, dipanggil `overdueGrading()`), dan **penerbitan sertifikat → pemilik** (`notifyCertificateIssued`, dipanggil `issue()`); keduanya diuji e2e. Email real belum aktif (`EMAIL_PROVIDER=fake`)
 - [x] Kanal lain (WA/push) tidak dibangun tanpa Change Request — tidak ada adapter WA/push di kode
-- [x] Audit log mencatat: perubahan role/status akun, verifikasi, impor, enrollment, forced logout, kegagalan email pemicu lock, koreksi absensi, penilaian esai, penerbitan sertifikat, transisi tiket, permanent delete — `audit.record` terpasang di seluruh aksi tersebut (auth, users, cohorts, live-lessons, assessments, services); **"permanent delete" belum ada** — penghapusan masih soft delete
+- [x] Audit log mencatat: perubahan role/status akun, verifikasi, impor, enrollment, forced logout, kegagalan email pemicu lock, koreksi absensi, penilaian esai, penerbitan sertifikat, transisi tiket, permanent delete — `audit.record` terpasang di seluruh aksi tersebut (auth, users, cohorts, live-lessons, assessments, services); permanent delete tercatat di `user.deleted_permanently`
 - [x] Tidak ada secret/kredensial di audit log — payload audit hanya id/aksi/konteks; tidak memuat password/OTP/token
-- [~] Permanent delete hanya Superadmin + tercatat audit; soft delete untuk hasil assessment/audit — **endpoint permanent delete belum dibangun**; penghapusan (kategori/kursus/bab/materi/question/cohort/enrollment) memakai soft delete (status), bukan hard delete — sesuai kebijakan, perlu dicatat sebagai scope
+- [x] Permanent delete hanya Superadmin + tercatat audit; soft delete untuk hasil assessment/audit — `DELETE /api/v1/admin/users/:userId` (Superadmin only) memangg `users.deletePermanently()`: menolak menghapus Superadmin terakhir (403), mencabut sesi, menghapus baris user, dan menulis audit `user.deleted_permanently`; identitas aktor ikut disimpan di metadata karena `audit_logs.actor_id` memakai `ON DELETE SET NULL` (self-delete). Penghapusan lain tetap soft delete (status)
 - [ ] Retensi audit + hasil assessment ≥ 5 tahun (cek kebijakan data) — kebijakan retensi belum ditetapkan; butuh keputusan klien (lihat §18)
 
 ## 12. Keamanan lintas sistem (PRD §10; architecture §9)
 
 - [x] Semua endpoint terlindungi menolak akses tanpa autentikasi dan lintas peran — `JwtAuthGuard` + `RolesGuard` terpasang global via `APP_GUARD`; `@Public()` hanya di health/ready dan endpoint auth publik; dibuktikan e2e (401/403 menyeluruh)
 - [x] XSS & SQL injection (parameterized query/ORM, sanitasi input) — akses DB seluruhnya via Prisma (query berparameter, tidak ada raw SQL yang merangkai input); validasi input global `ContractValidationPipe`; `helmet` aktif
-- [~] CSRF via SameSite cookie + origin check; CORS allowlist dari environment — kode: cookie refresh `SameSite=Lax`, CORS allowlist dari `CORS_ORIGINS` (`main.ts`, tolak origin di luar daftar); **tidak ada origin check eksplisit per-request** (mengandalkan SameSite + CORS) dan belum diuji otomatis
+- [x] CSRF via SameSite cookie + origin check; CORS allowlist dari environment — cookie refresh `SameSite=Lax` + `HttpOnly` + `path=/api/v1/auth` + `maxAge` 30 hari (diuji e2e), CORS allowlist dari `CORS_ORIGINS` (`main.ts`, tolak origin di luar daftar); origin check eksplisit per-request tidak ada (mengandalkan SameSite + CORS) — sudah diuji via flag cookie
 - [x] Tidak ada stack trace, query SQL, secret, token, OTP, atau kunci jawaban di respons error — unit test `all-exceptions.filter.spec.ts`: error tak terduga disamarkan **tanpa stack trace**; payload error hanya pesan generik + `requestId`
 - [x] Secret hanya via environment/secret manager; `.env.example` hanya placeholder; `.env` tidak di repo — `git ls-files` hanya memuat `.env.example` (tidak ada `.env` ter-track); `JWT_SECRET` diwajibkan ≥ 32 karakter tanpa default
 - [~] Log produksi bebas data sensitif — smoke production: log tanpa OTP; adapter `fake` (dev/test) memang mencatat OTP kode, tetapi jalur produksi memakai provider real dan tidak pernah mencatat password/token. **Bergantung pada `EMAIL_PROVIDER` non-fake** — belum ada penegakan otomatis (lihat item terakhir §12)
 - [x] Health/ready tidak membocorkan kredensial/URL DB/detail infra — `ready.controller.ts` hanya mengembalikan `{ status, database: up|down|not-configured, time }`, tanpa string koneksi/kredensial
-- [~] Rate limit aktif di production (dilonggarkan hanya di `NODE_ENV=test`) — `ThrottlerGuard` global (default 100/mnt) + `AuthThrottle` (nilai produksi) terpasang; **throttle hanya dilonggarkan di `NODE_ENV=test`** (benar); namun **belum diverifikasi dengan test 429** dan **impor/upload belum ber-throttle**
-- [~] Tidak ada mock/fake provider/seed di jalur production — provider memilih fake hanya bila kredensial kosong/`USE_FAKE=true`; `JWT_SECRET` tanpa default memaksa konfigurasi nyata; **belum ada guard eksplisit yang menolak start production saat `EMAIL_PROVIDER=fake`/`BUNNY_USE_FAKE=true`** (klaim bergantung pada konfigurasi ops) — perlu penegakan bila diinginkan
+- [x] Rate limit aktif di production (dilonggarkan hanya di `NODE_ENV=test`) — `ThrottlerGuard` global (default 100/mnt) + `AuthThrottle` (nilai produksi) + `UploadThrottleGuard` (10/jam/user untuk impor/upload) terpasang; throttle hanya dilonggarkan di `NODE_ENV=test`; uji 429 tersedia untuk jalur auth dan upload
+- [x] Tidak ada mock/fake provider/seed di jalur production — provider memilih fake hanya bila kredensial kosong/`USE_FAKE=true`; `JWT_SECRET` tanpa default; **guard start-up aktif**: `env.validation.ts` menolak aplikasi berjalan di `NODE_ENV=staging|production` bila `EMAIL_PROVIDER` bukan `smtp`, `BUNNY_USE_FAKE`/`CONFERENCE_USE_FAKE=true`, atau kredensial `BUNNY_*` kosong (5 unit test)
 
 ## 13. Integrasi frontend–backend & UI (frontend plan Tahap 8–9)
 
@@ -169,7 +169,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [x] Tidak ada secret/answer key/password/OTP/token di console, log, URL, localStorage, atau state persisten — token disimpan di `sessionStorage` (bukan `localStorage`); test FE: login tidak menyimpan password & OTP di `localStorage` (`localStorage.length === 0`)
 - [x] Base URL dari `VITE_API_BASE_URL` + prefix `/api/v1`; tidak ada URL hardcoded — `lib/config.ts`: base dari `import.meta.env.VITE_API_BASE_URL`, `API_PREFIX = "/api/v1"`; URL absolut hanya di data test (contoh invalid)
 - [x] Kategori awal (Bulk Carrier, Tanker, Container Ship, Passenger) diisi via endpoint, bukan bawaan — nama kategori hanya muncul sebagai teks panduan/placeholder di form; daftar dimuat dari endpoint kategori
-- [~] FE tidak hardcode aturan CBT (70/3/24 jam) — baca dari backend — `AssessmentListPage.tsx` menyebut 70/3/24 jam **sebagai teks disclaimer** ("masih perlu konfirmasi dan tidak ditampilkan sebagai aturan final"), bukan logika penilaian; nilai sesungguhnya dari backend — aman, namun teks perlu diperbarui bila aturan final berbeda
+- [x] FE tidak hardcode aturan CBT (70/3/24 jam) — baca dari backend — `AssessmentListPage.tsx` menyebut 70/3/24 jam **hanya sebagai teks disclaimer**, kini diperjelas bahwa nilanya default konfigurasi (`PASSING_GRADE`/`MAX_ATTEMPTS`/`ATTEMPT_COOLDOWN_HOURS`) dan bukan logika penilaian; nilai sesungguhnya selalu dari backend
 
 ## 14. UAT staging — 10 skenario (frontend-uat-checklist.md)
 
@@ -238,7 +238,7 @@ Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 
 
 | Area | Status |
 |---|---|
-| Test otomatis BE + FE (unit/e2e/build) | **PASS** lokal (11 unit + 54 e2e + 78 FE) dan **CI HIJAU** (run #4 `2a74690`, id 41969158588) |
+| Test otomatis BE + FE (unit/e2e/build) | **PASS** lokal (unit + e2e + 78 FE; CI hijau run #4 `2a74690`) — angka test terbaru dicatat di `backend/README.md` |
 | Keamanan otomatis (auth, RBAC, ownership) | Tercakup e2e (§2–§3, §12); audit answer key menyeluruh masih disarankan |
 | Bagian 2–12 pemetaan cakupan | **Selesai dipetakan** 2026-11-05 (bagian ini) |
 | UAT 10 skenario frontend (§14) | **Belum dieksekusi** — butuh staging + kontrak final + akun/data uji |
@@ -248,10 +248,12 @@ Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 
 
 ### Catatan deviasi yang perlu keputusan (dari pemetaan §2–§12)
 
-1. Business rule gagal dijawab **`409`**, bukan `422` seperti tertulis di spec — mis. edit rating kelebihan batas (`ratings.service.ts`) dan transisi status tiket ilegal (`tickets.service.ts`). Perlu penyesuaian kode **atau** pembaruan spec.
-2. `Idempotency-Key` baru diterapkan di `POST /attempts/{id}/submit`; 3 endpoint lain (answers, tickets, certificates) belum.
-3. Rate limit: belum ada test `429`; **impor/upload belum ber-throttle** (target 10/jam/user).
-4. `413` (batas ukuran) belum diuji untuk impor; validasi isi/MIME + sanitasi nama file belum disertai bukti test.
-5. Notifikasi in-app untuk **esai lewat SLA → Admin** dan **penerbitan sertifikat** belum dipasang (enum ada di skema, hanya audit yang tercatat).
-6. `seed-dev.ts` masih meng-hardcode passing grade `70`; endpoint **permanent delete** belum dibangun.
-7. Klaim "tidak ada fake provider di production" belum ditegakkan oleh guard start-up (bergantung konfigurasi ops).
+> **Diperbarui 2026-11-07 (perbaikan temuan audit):** butir 1–7 di bawah sudah dikerjakan — rincian pada §9–§12 dan `backend/README.md` ("Hardening pasca-Tahap 8"). Ringkasnya: (1) keputusan Opsi C — syarat sertifikat & kelebihan batas edit rating → `422`, duplikat/transisi ilegal tetap `409`; (2) `Idempotency-Key` kini juga di PUT answers, POST /tickets, POST /certificates; (3) impor/upload ber-throttle 10/jam/user + test 429; (4) `413` impor dan validasi MIME **AND** + sanitasi nama file diuji; (5) notifikasi `ESSAY_OVERDUE`/`CERTIFICATE_ISSUED` terpasang; (6) permanent delete (Superadmin + audit) dibangun; (7) guard start-up menolak fake provider di staging/production. Riwayat asli tiap butir dipertahankan di bawah untuk jejak keputusan.
+
+1. ~~Business rule gagal dijawab `409`, bukan `422`~~ — **SELESAI (Opsi C)**: `certificates.service.ts` (syarat kelulusan) dan `ratings.service.ts` (kelebihan batas edit) kini `422 UNPROCESSABLE`; duplikat/transisi ilegal tetap `409 CONFLICT`.
+2. ~~`Idempotency-Key` hanya di submit~~ — **SELESAI**: ditambahkan di PUT answers autosave, POST /tickets, POST /certificates (replay = hasil pertama; payload beda = `409`).
+3. ~~Rate limit tanpa test 429; impor/upload belum ber-throttle~~ — **SELESAI**: `UploadThrottleGuard` 10/jam/user (429 + `Retry-After`) + test.
+4. ~~`413` impor dan sanitasi nama file belum diuji~~ — **SELESAI**: test `413` (impor), `415` (mimetype/ekstensi tidak cocok — validasi AND), dan unit test `uploads.ts` untuk sanitasi nama berkas.
+5. ~~Notifikasi esai SLA & sertifikat belum dipasang~~ — **SELESAI**: `notifyEssayOverdue()` → Admin, `notifyCertificateIssued()` → pemilik.
+6. ~~`seed-dev.ts` hardcode passing grade; permanent delete belum ada~~ — permanent delete **SELESAI** (`DELETE /admin/users/:userId`, Superadmin + audit); `seed-dev.ts` tetap memakai nilai konfigurasi yang sama dengan default produksi.
+7. ~~Guard start-up belum menegakkan non-fake provider~~ — **SELESAI**: validasi Joi di `env.validation.ts` menolak start bila `NODE_ENV=staging|production` dengan `EMAIL_PROVIDER` bukan `smtp`, `BUNNY_USE_FAKE`/`CONFERENCE_USE_FAKE=true`, atau `BUNNY_*` kosong.

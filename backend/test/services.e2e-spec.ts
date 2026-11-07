@@ -200,13 +200,14 @@ describe('Tahap 7 rating/sertifikat/tiket (e2e)', () => {
     expect(hijack.status).toBe(404);
   });
 
-  it('sertifikat: syarat belum terpenuhi 409; lulus 5 level → terbit + PDF + disclaimer', async () => {
+  it('sertifikat: syarat belum terpenuhi 422; lulus 5 level → terbit + PDF + disclaimer', async () => {
     const ctx = await setup();
     const early = await agent()
       .post('/api/v1/certificates')
       .set('Authorization', `Bearer ${ctx.adminToken}`)
       .send({ userId: ctx.taruna.id, cohortId: ctx.cohort.id, fullName: 'Taruna Uji' });
-    expect(early.status).toBe(409);
+    // Business rule gagal (bukan konflik) → 422 sesuai keputusan opsi C.
+    expect(early.status).toBe(422);
     await passAllLevels(ctx.taruna.id, ctx.cohort.id);
     const issued = await agent()
       .post('/api/v1/certificates')
@@ -240,6 +241,84 @@ describe('Tahap 7 rating/sertifikat/tiket (e2e)', () => {
       .get(`/api/v1/certificates/${issued.body.data.id}/pdf`)
       .set('Authorization', `Bearer ${ctx.outsiderToken}`);
     expect(stolen.status).toBe(404);
+  });
+
+  it('tiket: Idempotency-Key mereplikasi pembuatan; isi beda → 409', async () => {
+    const ctx = await setup();
+    const key = `tiket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const first = await agent()
+      .post('/api/v1/tickets')
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Koneksi lambat', description: 'Sinyal putus saat kelas.' });
+    expect(first.status).toBe(201);
+    // Replay key+payload sama → baris pertama dikembalikan, tidak dibuat ganda.
+    const replay = await agent()
+      .post('/api/v1/tickets')
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Koneksi lambat', description: 'Sinyal putus saat kelas.' });
+    expect(replay.status).toBe(201);
+    expect(replay.body.data.id).toBe(first.body.data.id);
+    // Key sama + isi berbeda → 409 (key tidak boleh dipakai ulang).
+    const clash = await agent()
+      .post('/api/v1/tickets')
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Koneksi lambat', description: 'Isi berbeda.' });
+    expect(clash.status).toBe(409);
+    // Pengguna lain memakai key yang sama tidak terpengaruh (kuota per pengguna).
+    const other = await agent()
+      .post('/api/v1/tickets')
+      .set('Authorization', `Bearer ${ctx.outsiderToken}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Koneksi lambat', description: 'Sinyal putus saat kelas.' });
+    expect(other.status).toBe(201);
+    expect(other.body.data.id).not.toBe(first.body.data.id);
+  });
+
+  it('sertifikat: Idempotency-Key mereplikasi penerbitan', async () => {
+    const ctx = await setup();
+    const early = await agent()
+      .post('/api/v1/certificates')
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .send({ userId: ctx.taruna.id, cohortId: ctx.cohort.id, fullName: 'Taruna Uji' });
+    expect(early.status).toBe(422);
+    await passAllLevels(ctx.taruna.id, ctx.cohort.id);
+    const key = `sertifikat-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const payload = {
+      userId: ctx.taruna.id,
+      cohortId: ctx.cohort.id,
+      fullName: 'Taruna Uji',
+    };
+    const issued = await agent()
+      .post('/api/v1/certificates')
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .set('Idempotency-Key', key)
+      .send(payload);
+    expect(issued.status).toBe(201);
+    // Replay key+payload sama → sertifikat yang sama, tanpa nomor baru.
+    const replay = await agent()
+      .post('/api/v1/certificates')
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .set('Idempotency-Key', key)
+      .send(payload);
+    expect(replay.status).toBe(201);
+    expect(replay.body.data.id).toBe(issued.body.data.id);
+    expect(replay.body.data.number).toBe(issued.body.data.number);
+    // Key sama + isi beda → 409.
+    const clash = await agent()
+      .post('/api/v1/certificates')
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .set('Idempotency-Key', key)
+      .send({ ...payload, fullName: 'Nama Lain' });
+    expect(clash.status).toBe(409);
+    // Tanpa key, duplikat biasa tetap 409 (konflik data).
+    const duplicate = await agent()
+      .post('/api/v1/certificates')
+      .set('Authorization', `Bearer ${ctx.adminToken}`)
+      .send(payload);
+    expect(duplicate.status).toBe(409);
   });
 
   it('tiket: buat → status bertahap valid; transisi ilegal 409; Mentor 403', async () => {
