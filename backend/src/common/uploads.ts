@@ -1,19 +1,27 @@
-// Helper bersama untuk berkas unggahan: nama berkas dibersihkan (basename +
-// karakter aman) agar tak bisa dipakai untuk path traversal / nama berkas
-// berisi karakter aneh saat dicatat atau diunduh kembali, dan pengecekan tipe
-// berkas memakai AND (mimetype DAN ekstensi harus valid) — bukan OR, supaya
-// berkas dengan mimetype dikirim asal tidak lolos.
-import { basename, extname } from 'path';
-
+// Helper bersama untuk berkas unggahan: nama berkas dibersihkan (hanya nama
+// terakhir, tanpa karakter selain [A-Za-z0-9._-]) agar tak bisa dipakai untuk
+// path traversal, dan pengecekan tipe berkas memakai AND (mimetype DAN
+// ekstensi harus valid) — bukan OR, supaya berkas dengan mimetype dikirim asal
+// tidak lolos.
+//
+// Catatan lintas platform: `path.basename` hanya mengenali pemisah milik
+// platform yang sedang berjalan (win32 vs posix), sehingga nama berkas berisi
+// pemisah platform LAIN tidak dibersihkan. Karena berkas bisa datang dari
+// klien dengan OS apa pun, pemisah dikenali manual di sini.
+const PATH_SEPARATORS = /[/\\]/g;
 const SAFE_NAME = /[^A-Za-z0-9._-]/g;
 const MAX_NAME_LENGTH = 255;
 
 /**
- * Nama berkas aman: hanya path terakhir, tanpa karakter selain [A-Za-z0-9._-],
- * tidak dimulai dengan titik, dan dibatasi panjangnya.
+ * Nama berkas aman: hanya segmen terakhir (setelah `/` atau `\`), tanpa
+ * karakter selain [A-Za-z0-9._-], tidak dimulai dengan titik, dan dibatasi
+ * panjangnya.
  */
 export function sanitizeFileName(original: string): string {
-  const base = basename(String(original ?? '')).replace(SAFE_NAME, '_');
+  const raw = String(original ?? '');
+  // Ambil segmen terakhir untuk kedua jenis pemisah path (lintas platform).
+  const lastSegment = raw.split(PATH_SEPARATORS).pop() ?? '';
+  const base = lastSegment.replace(SAFE_NAME, '_');
   const trimmed = base.replace(/^\.+/, '').slice(0, MAX_NAME_LENGTH);
   return trimmed.length > 0 ? trimmed : 'berkas.xlsx';
 }
@@ -22,7 +30,11 @@ export function sanitizeFileName(original: string): string {
  * Ekstensi huruf kecil (tanpa titik) — dipakai untuk validasi tipe berkas.
  */
 export function fileExtension(original: string): string {
-  return extname(sanitizeFileName(original)).toLowerCase().replace('.', '');
+  const name = sanitizeFileName(original);
+  const dot = name.lastIndexOf('.');
+  // Tanpa titik, atau titik di posisi pertama (nama tersembunyi) → tanpa ekstensi.
+  if (dot <= 0) return '';
+  return name.slice(dot + 1).toLowerCase();
 }
 
 /**

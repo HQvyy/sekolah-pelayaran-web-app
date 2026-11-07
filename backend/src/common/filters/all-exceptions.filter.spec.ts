@@ -5,8 +5,8 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
-import { ErrorCode } from '../src/common/envelope';
+import { AllExceptionsFilter } from './all-exceptions.filter';
+import { ErrorCode } from '../envelope';
 
 function hostWith(
   overrides: Record<string, unknown> = {},

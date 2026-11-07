@@ -11,12 +11,15 @@ const XLSX_MIME = [
 describe('uploads helper', () => {
   describe('sanitizeFileName', () => {
     it('membuang path dan hanya menyisakan nama berkas', () => {
+      // Kedua jenis pemisah path harus dikenali di platform apa pun:
+      // `path.basename` hanya mengenali pemisah platform yang berjalan.
       expect(sanitizeFileName('C:\\Users\\x\\..\\..\\impor.xlsx')).toBe(
         'impor.xlsx',
       );
       expect(sanitizeFileName('/var/tmp/../../etc/impor.xlsx')).toBe(
         'impor.xlsx',
       );
+      expect(sanitizeFileName('../../etc/passwd')).toBe('passwd');
     });
 
     it('mengganti karakter berbahaya dengan underscore', () => {
@@ -28,9 +31,7 @@ describe('uploads helper', () => {
     it('menolak nama kosong atau hanya titik', () => {
       expect(sanitizeFileName('')).toBe('berkas.xlsx');
       expect(sanitizeFileName('...')).toBe('berkas.xlsx');
-      expect(sanitizeFileName('..\\..\\etc\\passwd')).toBe(
-        'passwd',
-      );
+      expect(sanitizeFileName('..\\..\\etc\\passwd')).toBe('passwd');
     });
 
     it('membatasi panjang nama', () => {
@@ -87,6 +88,9 @@ describe('uploads helper', () => {
     it('fileExtension mengembalikan ekstensi tanpa titik', () => {
       expect(fileExtension('impor.XLSX')).toBe('xlsx');
       expect(fileExtension('tanpa-ekstensi')).toBe('');
+      // Nama tersembunyi (.gitignore) bukan ekstensi.
+      expect(fileExtension('.gitignore')).toBe('');
+      expect(fileExtension('berkas..xlsx')).toBe('xlsx');
     });
   });
 });

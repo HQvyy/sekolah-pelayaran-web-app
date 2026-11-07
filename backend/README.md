@@ -308,3 +308,16 @@ lain, dan tidak pernah dijalankan otomatis.
   masa pakai, dan token sekali pakai kini memetakan ke kode error `GONE`
   (`src/common/envelope.ts`) — sebelumnya jatuh ke `VALIDATION_ERROR`
   yang menyesatkan bagi klien.
+
+### Catatan pemeliharaan test
+
+- `npm test` (unit) memindai `src/**` sedangkan `npm run test:e2e`
+  memindai `test/**/*.e2e-spec.ts`. Spec yang bukan e2e **harus** berada di
+  `src/` agar ikut terjalan — `test/all-exceptions.filter.spec.ts` pernah
+  tidak pernah dieksekusi karena alasan ini dan sudah dipindahkan ke
+  `src/common/filters/`.
+- Helper di `src/common/uploads.ts` sengaja **tidak** memakai
+  `path.basename`: fungsi itu hanya mengenali pemisah path milik platform
+  yang berjalan, sehingga nama berkas berisi pemisah platform lain (mis.
+  path Windows di server Linux) tidak dibersihkan. Pemisah dikenali manual
+  agar perilakunya sama di semua OS.
