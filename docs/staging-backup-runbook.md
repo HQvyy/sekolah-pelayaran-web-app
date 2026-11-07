@@ -23,9 +23,12 @@ Status: **terverifikasi lokal** (build + boot production-mode + health/ready
 
 ## 2. Pipeline CI/CD dasar
 
-- Workflow: `.github/workflows/backend-ci.yml` (push `be`/`dev`/`main`,
+- Workflow backend: `.github/workflows/backend-ci.yml` (push `be`/`dev`/`main`,
   PR ke `main`): Postgres 18 service → `prisma:deploy` → typecheck →
   lint → unit → e2e → build.
+- Workflow frontend: `.github/workflows/frontend-ci.yml` (push
+  `fe`/`be`/`dev`/`main` bila `frontend/**` berubah, PR ke `main`/`dev`):
+  `npm ci` → typecheck → lint → vitest → build. Tidak butuh Postgres.
 - Secrets (`DATABASE_URL` prod, `JWT_SECRET`, SMTP/Bunny) disimpan di
   **secret manager/CI variables** — tidak di repo (`.env.example` hanya
   placeholder; `.env` di-gitignore).

@@ -47,6 +47,14 @@ npm run test -- --run --pool=forks --maxWorkers=1 src/test/live.test.tsx
 npm run test -- --run --pool=forks --maxWorkers=1 src/test/cbt.test.tsx
 ```
 
+## CI
+
+`.github/workflows/frontend-ci.yml` menjalankan `npm ci`, `typecheck`,
+`lint`, `test`, dan `build` untuk setiap perubahan pada `frontend/**`
+(push `fe`/`be`/`dev`/`main`, PR ke `main`/`dev`). Urutan step sama dengan
+perintah lokal di atas, jadi kegagalan CI bisa direproduksi di komputer
+yang sama.
+
 ## Struktur
 
 ```text

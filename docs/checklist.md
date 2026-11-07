@@ -22,6 +22,11 @@ Dieksekusi lokal 2026-11-05, branch `dev`. e2e diarahkan ke DB `spli_test` lewat
 - [x] CI pipeline `.github/workflows/backend-ci.yml` — **berjalan dan HIJAU**. 3 run pertama (run #1 `c92180c` branch `be`, run #2 `622ce15`, run #3 `2130edc` branch `dev`) gagal di step `npm ci` dengan *"Missing: webpack@5.112.2 from lock file"*: lockfile dibuat npm 12 (lokal), CI node 22 memakai npm 10 yang menempatkan peer-dependency webpack secara berbeda. Diperbaiki di `2a74690` (lock diregenerasi dengan npm 10; `npm ci --dry-run` terverifikasi lulus di npm 10, 11, dan 12). Run #4 (commit `2a74690`) **success** ±83 dtk di ubuntu-latest + layanan PostgreSQL 18 — seluruh step hijau: `npm ci` 17 dtk, `prisma:deploy`, `typecheck`, `lint`, unit test, e2e 54 test 28 dtk, `build` (bukti: run id 41969158588).
 - [x] Smoke production-mode: start tanpa `DATABASE_URL` gagal cepat dengan `Config validation error` yang jelas; dengan DB test di port 3999 → `/api/v1/health` 200, `/ready` 200 (database up), `/docs` + `/docs-json` 200, `/api/v1/admin/users` tanpa auth → 401, login kredensial tak dikenal → 401 tanpa enumerasi; log production **tanpa OTP** dan tiap request ber-`requestId`
 
+>
+> ### CI frontend
+
+- [x] CI pipeline `.github/workflows/frontend-ci.yml` — **baru**, memvalidasi push/PR ke `frontend/**` (branch `fe`/`be`/`dev`/`main`, PR ke `main`/`dev`). Step: `npm ci` → `typecheck` → `lint` → `test` (vitest, `--pool=forks --maxWorkers=1`) → `build`. Tidak butuh service PostgreSQL karena test FE men-stub `fetch`. `VITE_API_BASE_URL=http://localhost:3000` hanya nilai dummy untuk build CI. Sebelum workflow ditulis, seluruh perintah diverifikasi lulus secara lokal: 78/78 test, 0 warning lint, typecheck, build ±303 ms.
+
 ## 2. Matriks umum per endpoint API (api-spec §16)
 
 Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemetaan 2026-11-05: bukti utama 9 suite / 54 test e2e (PostgreSQL nyata) + inspeksi kode; peliputan **per endpoint masih parsial** — cakupan penuh butuh penambahan test bertahap.

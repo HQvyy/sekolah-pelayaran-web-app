@@ -94,7 +94,10 @@ describe("navigasi assessment", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: /level 1 tanker/i })).toBeInTheDocument();
     });
-    expect(screen.getByText(/masih perlu konfirmasi/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/remedial belum ditentukan dan tidak ditampilkan sebagai aturan final/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/default konfigurasi, dapat diubah lewat PASSING_GRADE/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /instruksi dan mulai/i })).toHaveAttribute("href", "/asesmen/assessment-1");
   });
 
