@@ -140,7 +140,10 @@ export function LiveLessonDetailPage({ liveLessonId }: { liveLessonId: string })
     );
   }
 
-  const joinable = canJoinLesson(lesson);
+  // Tombol Masuk Kelas hanya untuk Taruna: guard backend (@Roles(TARUNA))
+  // akan menolak peran lain, jadi tombolnya tidak boleh ditawarkan.
+  const isTaruna = user?.role === "TARUNA";
+  const joinable = isTaruna && canJoinLesson(lesson);
 
   return (
     <div className="page">
@@ -151,7 +154,7 @@ export function LiveLessonDetailPage({ liveLessonId }: { liveLessonId: string })
         <p>
           <Badge tone={lesson.status === "CANCELLED" ? "neutral" : "open"}>{liveStatusLabel(lesson.status)}</Badge>
         </p>
-        {!joinable ? <p className="field-help">{joinBlockedMessage(lesson)}</p> : null}
+        {isTaruna && !joinable ? <p className="field-help">{joinBlockedMessage(lesson)}</p> : null}
         {lesson.status === "CANCELLED" ? (
           <ErrorAlert>Jadwal dibatalkan. Perubahan melewati alur join yang ditetapkan backend.</ErrorAlert>
         ) : null}

@@ -6,6 +6,10 @@ export const LESSON_RULES = {
   RESCHEDULE_MIN_HOURS: 24,
   // Absensi ditutup 24 jam setelah sesi berakhir.
   ATTENDANCE_CLOSE_HOURS: 24,
+  // Toleransi masuk sebelum kelas dimulai: Taruna boleh membuka ruang 15 menit
+  // lebih awal agar sesi tidak tertunda. Nilai ini murni keputusan server —
+  // frontend tidak boleh menghitung jendela sendiri sebagai sumber kebenaran.
+  JOIN_OPEN_BEFORE_MINUTES: 15,
   // Jitsi: ruang gratis via meet.jit.si; embed iframe di aplikasi.
   JITSI_BASE_URL: 'https://meet.jit.si',
   // Jadwal dibuat Mentor pemilik kelas + Admin/Superadmin (keputusan Tahap 5).

@@ -7,7 +7,8 @@ import { AttendancePage } from "../features/live/AttendancePage.tsx";
 import { LiveLessonDetailPage } from "../features/live/LiveLessonDetailPage.tsx";
 import { LiveLessonFormPage } from "../features/live/LiveLessonFormPage.tsx";
 import { LiveLessonListPage } from "../features/live/LiveLessonListPage.tsx";
-import { formatLiveRange, validateLessonTime } from "../features/live/liveUtils.ts";
+import { canJoinLesson, formatLiveRange, joinBlockedMessage, validateLessonTime } from "../features/live/liveUtils.ts";
+import type { LiveLesson } from "../features/live/liveTypes.ts";
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -58,6 +59,12 @@ function lessonPayload() {
   };
 }
 
+function lessonWith(overrides: Partial<LiveLesson>): LiveLesson {
+  return { ...lessonPayload(), ...overrides } as LiveLesson;
+}
+
+const MINUTE_MS = 60_000;
+
 beforeEach(() => {
   vi.unstubAllGlobals();
 });
@@ -72,6 +79,58 @@ describe("zona waktu live lesson", () => {
 
   it("menolak waktu selesai sebelum mulai", () => {
     expect(validateLessonTime("2026-11-10T10:00", "2026-11-10T09:00")).toMatch(/setelah waktu mulai/i);
+  });
+});
+
+describe("kelayakan masuk kelas (isJoinable)", () => {
+  const ongoing = {
+    startsAt: new Date(Date.now() - 10 * MINUTE_MS).toISOString(),
+    endsAt: new Date(Date.now() + 60 * MINUTE_MS).toISOString(),
+  };
+
+  it("mengikuti keputusan server saat field dikirim", () => {
+    expect(canJoinLesson(lessonWith({ ...ongoing, status: "ONGOING", isJoinable: true }))).toBe(true);
+    expect(canJoinLesson(lessonWith({ ...ongoing, status: "ONGOING", isJoinable: false }))).toBe(false);
+  });
+
+  it("menolak kelas dibatalkan/selesai walau isJoinable true", () => {
+    expect(canJoinLesson(lessonWith({ status: "CANCELLED", isJoinable: true }))).toBe(false);
+    expect(canJoinLesson(lessonWith({ status: "FINISHED", isJoinable: true }))).toBe(false);
+  });
+
+  it("fallback waktu saat backend tidak mengirim isJoinable", () => {
+    expect(canJoinLesson(lessonWithoutJoinable({ ...ongoing, status: "SCHEDULED" }))).toBe(true);
+    // Belum dibuka: 2 jam lagi > toleransi 15 menit.
+    const later = {
+      startsAt: new Date(Date.now() + 120 * MINUTE_MS).toISOString(),
+      endsAt: new Date(Date.now() + 240 * MINUTE_MS).toISOString(),
+    };
+    expect(canJoinLesson(lessonWithoutJoinable({ ...later, status: "SCHEDULED" }))).toBe(false);
+    // Toleransi 10 menit sebelum mulai masih boleh.
+    const soon = {
+      startsAt: new Date(Date.now() + 10 * MINUTE_MS).toISOString(),
+      endsAt: new Date(Date.now() + 120 * MINUTE_MS).toISOString(),
+    };
+    expect(canJoinLesson(lessonWithoutJoinable({ ...soon, status: "SCHEDULED" }))).toBe(true);
+  });
+
+  it("pesan blokir tidak muncul saat kelas justru bisa diikuti", () => {
+    expect(joinBlockedMessage(lessonWith({ ...ongoing, status: "ONGOING", isJoinable: true }))).toBe("");
+    // Regresi BE-02: backend tanpa isJoinable tapi kelas sedang berlangsung.
+    expect(joinBlockedMessage(lessonWithoutJoinable({ ...ongoing, status: "ONGOING" }))).toBe("");
+  });
+
+  it("pesan blokir menjelaskan alasan", () => {
+    expect(joinBlockedMessage(lessonWith({ status: "CANCELLED", isJoinable: false }))).toMatch(/dibatalkan/i);
+    expect(joinBlockedMessage(lessonWith({ status: "FINISHED", isJoinable: false }))).toMatch(/selesai/i);
+    expect(joinBlockedMessage(lessonWith({ ...ongoing, status: "ONGOING", isJoinable: false }))).toMatch(
+      /belum dapat diikuti/i,
+    );
+    const later = {
+      startsAt: new Date(Date.now() + 120 * MINUTE_MS).toISOString(),
+      endsAt: new Date(Date.now() + 240 * MINUTE_MS).toISOString(),
+    };
+    expect(joinBlockedMessage(lessonWithoutJoinable({ ...later, status: "SCHEDULED" }))).toMatch(/belum dibuka/i);
   });
 });
 
@@ -138,6 +197,53 @@ describe("daftar dan join live lesson", () => {
       expect(screen.getByText(/akses ditolak backend/i)).toBeInTheDocument();
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/join"))).toBe(true);
+  });
+
+  it("tombol masuk kelas muncul walau backend tidak mengirim isJoinable (kelas sedang berlangsung)", async () => {
+    // Respons lama/backend tanpa field isJoinable: UI harus tetap mengizinkan
+    // masuk selama kelas sedang berlangsung (fallback waktu, toleransi 15 menit).
+    const payload = { ...lessonPayload() } as Record<string, unknown>;
+    delete payload.isJoinable;
+    const ongoing = {
+      ...payload,
+      startsAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      endsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ data: ongoing }, 200)),
+    );
+    render(
+      <MemoryRouter initialEntries={["/kelas-live/live-1"]}>
+        <SessionContext.Provider value={tarunaSession()}>
+          <LiveLessonDetailPage liveLessonId="live-1" />
+        </SessionContext.Provider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /masuk kelas/i })).toBeInTheDocument();
+    });
+    // Tidak boleh ada pesan blokir yang bertentangan dengan tombol yang tampil.
+    expect(screen.queryByText(/kelas belum dapat diikuti/i)).not.toBeInTheDocument();
+  });
+
+  it("menyembunyikan tombol masuk kelas untuk peran pengelola walau isJoinable true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ data: { ...lessonPayload(), isJoinable: true } }, 200)),
+    );
+    render(
+      <MemoryRouter initialEntries={["/kelas-live/live-1"]}>
+        <SessionContext.Provider value={mentorSession()}>
+          <LiveLessonDetailPage liveLessonId="live-1" />
+        </SessionContext.Provider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /batalkan kelas/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /masuk kelas/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/kelas belum dapat diikuti/i)).not.toBeInTheDocument();
   });
 
   it("tidak menampilkan tautan konferensi mentah", async () => {
@@ -276,3 +382,10 @@ describe("absensi live lesson", () => {
     expect(screen.queryByRole("button", { name: /simpan koreksi/i })).not.toBeInTheDocument();
   });
 });
+
+// Tanpa isJoinable: meniru respons backend yang belum menyertakan field itu.
+function lessonWithoutJoinable(overrides: Partial<LiveLesson>): LiveLesson {
+  const { isJoinable: _omit, ...rest } = { ...lessonPayload(), ...overrides };
+  void _omit;
+  return rest as LiveLesson;
+}

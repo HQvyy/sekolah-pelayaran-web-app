@@ -254,6 +254,7 @@ Ketentuan:
 
 Ketentuan:
 - Taruna harus masuk melalui tombol aplikasi. API join memeriksa kelayakan lalu memberi respons/redirect yang aman ke layanan eksternal; jangan menjadikan URL eksternal yang dibagikan langsung sebagai alur normal.
+- **`isJoinable` dikirim server** pada tiap item `GET /live-lessons`, `GET /live-lessons/{id}`, `GET /me/live-lessons`, dan respons create/update/cancel. Nilainya **keputusan server**, bukan turunan frontend: `true` hanya untuk peran `TARUNA`, status `SCHEDULED`/`ONGOING`, dan waktu server berada di dalam jendela `[startsAt - 15 menit, endsAt]`. Aturan yang sama dipakai `POST /live-lessons/{id}/join`, sehingga join di luar jendela itu ditolak `409` dan tidak ada absensi yang tercatat. Peran pengelola (Admin/Mentor/Superadmin) selalu menerima `false` karena endpoint join dibatasi `TARUNA`.
 - Absensi otomatis dicatat ketika tombol join digunakan sesuai aturan PRD; sistem tidak boleh mengklaim mendeteksi kehadiran fisik jika provider tidak memberikan sinyal tersebut.
 - Mentor dapat mengoreksi kehadiran secara manual; perubahan dicatat di audit log.
 - Absensi ditutup 24 jam setelah sesi berakhir.
@@ -479,6 +480,32 @@ Respons:
   }
 }
 ```
+
+### 15.4 Daftar kelas live — isJoinable dari server (usulan)
+
+```json
+{
+  "data": [
+    {
+      "id": "8f6d2a1e-1c4b-4f7a-9d31-2b0c5e6a7f90",
+      "cohortId": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "mentorId": "9c8b7a65-4321-4fed-ba98-7654321fedc0",
+      "title": "Simulasi Evakuasi dan Fire Drill",
+      "description": "Latihan evakuasi dan pemadaman api skala kecil.",
+      "startsAt": "2026-11-10T02:00:00.000Z",
+      "endsAt": "2026-11-10T04:00:00.000Z",
+      "status": "ONGOING",
+      "isJoinable": true,
+      "createdAt": "2026-11-01T03:00:00.000Z",
+      "updatedAt": "2026-11-01T03:00:00.000Z",
+      "cohort": { "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", "code": "A-2026", "name": "Angkatan A" }
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "totalItems": 1, "totalPages": 1 }
+}
+```
+
+`roomReference` tidak pernah ikut untuk peran Taruna (termasuk `GET /me/live-lessons`), dan hanya muncul pada respons peran pengelola. `isJoinable` tetap dikirim untuk semua peran agar UI tidak menebak.
 
 ## 16. OpenAPI, testing, dan versioning
 

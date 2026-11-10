@@ -30,8 +30,63 @@ export interface LessonActor {
 
 const HOUR_MS = 3_600_000;
 
+// Bentuk baris lesson yang diteruskan ke respons (tanpa roomReference).
+type LessonRow = {
+  id: string;
+  cohortId: string;
+  mentorId: string;
+  title: string;
+  description?: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  status: LessonStatus;
+  roomReference?: string | null;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+  cohort?: unknown;
+};
+
+type LessonRowWithCohort = LessonRow & { cohort?: unknown };
+
+type LessonResponse = LessonRow & { isJoinable: boolean };
+
 function hoursUntil(from: Date, to: Date): number {
   return (to.getTime() - from.getTime()) / HOUR_MS;
+}
+
+// Kelayakan join adalah keputusan server: Taruna yang terdaftar boleh masuk
+// hanya dalam jendela [mulai - 15 menit, selesai]. Status non-SCHEDULED/ONGOING
+// (CANCELLED) selalu ditolak. Peran pengelola melihat false agar tidak ada
+// tombol Masuk Kelas yang akan selalu ditolak guard Taruna-only.
+function isJoinableFor(lesson: LessonRow, role: Role, now = new Date()): boolean {
+  if (role !== Role.TARUNA) return false;
+  if (lesson.status !== LessonStatus.SCHEDULED && lesson.status !== LessonStatus.ONGOING) {
+    return false;
+  }
+  const opensAt =
+    lesson.startsAt.getTime() - LESSON_RULES.JOIN_OPEN_BEFORE_MINUTES * 60_000;
+  const nowMs = now.getTime();
+  return nowMs >= opensAt && nowMs <= lesson.endsAt.getTime();
+}
+
+function withJoinable<T extends LessonRowWithCohort>(
+  rows: T[],
+  role: Role,
+  now = new Date(),
+): LessonResponse[] {
+  return rows.map((row) => decorate(row, role, now));
+}
+
+// roomReference hanya untuk peran pengelola (Admin/Mentor) — Taruna tidak
+// pernah menerimanya, sesuai aturan "tautan konferensi tidak dibagikan".
+function decorate(row: LessonRowWithCohort, role: Role, now: Date = new Date()): LessonResponse {
+  const { roomReference, ...rest } = row;
+  return {
+    ...rest,
+    isJoinable: isJoinableFor(row, role, now),
+    ...(role !== Role.TARUNA && roomReference ? { roomReference } : {}),
+  };
 }
 
 @Injectable()
@@ -99,12 +154,9 @@ export class LiveLessonsService {
         take: pageSize,
       }),
     ]);
-    // Jangan bocorkan roomReference ke Taruna di daftar.
-    const data =
-      actor.role === Role.TARUNA
-        ? rows.map((row) => { const { roomReference: _omit, ...rest } = row; void _omit; return rest; })
-        : rows;
-    return paginated(data, page, pageSize, totalItems);
+    // isJoinable dikirim untuk semua peran agar UI bisa memutuskan tampilan
+    // tombol tanpa menebak; roomReference tetap tidak ikut (tidak bocor).
+    return paginated(withJoinable(rows, actor.role), page, pageSize, totalItems);
   }
 
   async create(
@@ -165,7 +217,7 @@ export class LiveLessonsService {
     });
     // Peserta = seluruh Taruna ACTIVE pada cohort saat jadwal dibuat.
     await this.syncParticipants(lesson.id, lesson.cohortId);
-    return lesson;
+    return decorate(lesson, actor.role);
   }
 
   async detail(actor: LessonActor, id: string) {
@@ -179,13 +231,12 @@ export class LiveLessonsService {
       if (lesson.status === LessonStatus.CANCELLED) {
         throw new NotFoundException('Jadwal tidak ditemukan.');
       }
-      const { roomReference: _omit, ...rest } = lesson; void _omit;
-      return rest;
+      return decorate(lesson, actor.role);
     }
     if (actor.role === Role.MENTOR && lesson.mentorId !== actor.id) {
       throw new ForbiddenException('Bukan kelas yang Anda ampu.');
     }
-    return lesson;
+    return decorate(lesson, actor.role);
   }
 
   // Reschedule: hanya pemilik/berwenang, paling lambat H-1. Tidak ada bypass.
@@ -233,7 +284,7 @@ export class LiveLessonsService {
         cohortId: updated.cohortId,
       });
     }
-    return updated;
+    return decorate(updated, actor.role);
   }
 
   async cancel(actor: LessonActor, id: string) {
@@ -261,7 +312,7 @@ export class LiveLessonsService {
       startsAt: updated.startsAt,
       cohortId: updated.cohortId,
     });
-    return updated;
+    return decorate(updated, actor.role);
   }
 
   // Join: validasi login (guard) + enrollment + jadwal + status. Mencatat
@@ -279,6 +330,12 @@ export class LiveLessonsService {
       throw new ForbiddenException('Hanya Taruna yang join via tombol kelas.');
     }
     await this.assertEnrolled(actor.id, lesson.cohortId);
+    // Aturan yang sama dengan isJoinable: jendela [mulai - 15 menit, selesai].
+    // Tanpa ini, kelas yang sudah lewat masih bisa di-join walau UI
+    // menyembunyikan tombolnya.
+    if (!isJoinableFor(lesson, actor.role)) {
+      throw new ConflictException('Kelas belum dibuka atau sudah selesai.');
+    }
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: actor.id },
     });
@@ -322,7 +379,7 @@ export class LiveLessonsService {
       include: { cohort: true },
       orderBy: { startsAt: 'asc' },
     });
-    return rows.map(({ roomReference: _room, ...rest }) => rest);
+    return withJoinable(rows, actor.role);
   }
 
   async attendance(actor: LessonActor, id: string) {

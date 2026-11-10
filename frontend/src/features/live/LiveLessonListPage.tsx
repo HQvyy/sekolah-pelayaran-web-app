@@ -135,11 +135,14 @@ export function LiveLessonListPage() {
               <p>
                 <Badge tone={statusTone(lesson.status)}>{liveStatusLabel(lesson.status)}</Badge>
               </p>
-              {!canJoinLesson(lesson) ? (
+              {/* Pesan blokir hanya untuk Taruna; peran pengelola tidak punya tombol join. */}
+              {user?.role === "TARUNA" && !canJoinLesson(lesson) ? (
                 <p className="field-help">{joinBlockedMessage(lesson)}</p>
               ) : null}
               <div className="button-row">
-                <ButtonLink to={`/kelas-live/${lesson.id}`}>Detail dan Masuk Kelas</ButtonLink>
+                <ButtonLink to={`/kelas-live/${lesson.id}`}>
+                  {user?.role === "TARUNA" ? "Detail dan Masuk Kelas" : "Detail kelas"}
+                </ButtonLink>
               </div>
             </Card>
           ))}

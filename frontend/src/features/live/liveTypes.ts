@@ -21,7 +21,9 @@ export interface LiveLesson {
   startsAt: string;
   endsAt: string;
   status: LiveLessonStatus;
-  isJoinable: boolean;
+  // Keputusan server (lihat liveUtils.canJoinLesson). Opsional agar UI tetap
+  // bekerja bila respons lama belum menyertakannya.
+  isJoinable?: boolean;
   createdAt: string;
   updatedAt: string;
 }

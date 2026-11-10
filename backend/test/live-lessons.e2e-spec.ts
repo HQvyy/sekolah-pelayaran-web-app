@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { FakeEmailService } from '../src/modules/notifications/fake-email.service';
-import { AccountStatus, Role } from '@prisma/client';
+import { AccountStatus, LessonStatus, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const EMAIL = (tag: string) => `t5-${tag}@contoh.id`;
@@ -95,6 +95,26 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     return res;
   }
 
+  // Jadwal yang SEDANG berlangsung (mulai 10 menit lalu, selesai 1 jam lagi).
+  // POST /live-lessons menolak jadwal di masa lampau, jadi dibuat lewat Prisma
+  // dengan status ONGOING — sama seperti data hasil seed.
+  async function createOngoingLesson(ctx: { cohort: { id: string }; mentor: { id: string }; admin: { id: string } }) {
+    const startsAt = new Date(Date.now() - 10 * 60_000);
+    const endsAt = new Date(Date.now() + 60 * 60_000);
+    return prisma.liveLesson.create({
+      data: {
+        cohortId: ctx.cohort.id,
+        mentorId: ctx.mentor.id,
+        title: `Kelas berjalan ${Date.now()}`,
+        startsAt,
+        endsAt,
+        status: LessonStatus.ONGOING,
+        roomReference: 'SPLI-BERJALAN',
+        createdBy: ctx.admin.id,
+      },
+    });
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -133,9 +153,10 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
 
   it('join: Taruna enrolled tercatat PRESENT + materi embed; non-enrolled 404', async () => {
     const ctx = await setup();
-    const created = await createLesson(ctx.mentorToken, ctx.cohort.id, 48);
+    // Hanya kelas yang sedang berlangsung yang bisa di-join (aturan server).
+    const created = await createOngoingLesson(ctx);
     const join = await agent()
-      .post(`/api/v1/live-lessons/${created.body.data.id}/join`)
+      .post(`/api/v1/live-lessons/${created.id}/join`)
       .set('Authorization', `Bearer ${ctx.tarunaToken}`)
       .send({});
     expect(join.status).toBe(200);
@@ -146,7 +167,7 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     const record = await prisma.attendanceRecord.findUnique({
       where: {
         lessonId_userId: {
-          lessonId: created.body.data.id,
+          lessonId: created.id,
           userId: ctx.taruna.id,
         },
       },
@@ -154,10 +175,103 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     expect(record?.status).toBe('PRESENT');
     expect(record?.source).toBe('JOIN');
     const noEnroll = await agent()
-      .post(`/api/v1/live-lessons/${created.body.data.id}/join`)
+      .post(`/api/v1/live-lessons/${created.id}/join`)
       .set('Authorization', `Bearer ${ctx.outsiderToken}`)
       .send({});
     expect(noEnroll.status).toBe(404);
+  });
+
+  it('isJoinable: true hanya saat kelas berlangsung + Taruna; window waktu ditolak', async () => {
+    const ctx = await setup();
+    const ongoing = await createOngoingLesson(ctx);
+    // Kelas belum dibuka: mulai 2 jam lagi (> toleransi 15 menit).
+    const notYet = await prisma.liveLesson.create({
+      data: {
+        cohortId: ctx.cohort.id,
+        mentorId: ctx.mentor.id,
+        title: `Belum dibuka ${Date.now()}`,
+        startsAt: new Date(Date.now() + 2 * HOUR_MS),
+        endsAt: new Date(Date.now() + 4 * HOUR_MS),
+        roomReference: 'SPLI-NANTI',
+        createdBy: ctx.admin.id,
+      },
+    });
+    // Kelas sudah selesai (status FINISHED).
+    const finished = await prisma.liveLesson.create({
+      data: {
+        cohortId: ctx.cohort.id,
+        mentorId: ctx.mentor.id,
+        title: `Sudah selesai ${Date.now()}`,
+        startsAt: new Date(Date.now() - 5 * HOUR_MS),
+        endsAt: new Date(Date.now() - 3 * HOUR_MS),
+        status: LessonStatus.FINISHED,
+        roomReference: 'SPLI-SELESAI',
+        createdBy: ctx.admin.id,
+      },
+    });
+    const list = await agent()
+      .get('/api/v1/live-lessons')
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`);
+    expect(list.status).toBe(200);
+    const byId = new Map(
+      list.body.data.map((item: { id: string; isJoinable: boolean }) => [item.id, item.isJoinable]),
+    );
+    expect(byId.get(ongoing.id)).toBe(true);
+    expect(byId.get(notYet.id)).toBe(false);
+    expect(byId.get(finished.id)).toBe(false);
+    // roomReference tidak boleh ikut ke Taruna.
+    expect(JSON.stringify(list.body.data)).not.toContain('roomReference');
+    // Detail: isJoinable ikut.
+    const detail = await agent()
+      .get(`/api/v1/live-lessons/${ongoing.id}`)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.isJoinable).toBe(true);
+    expect(detail.body.data.roomReference).toBeUndefined();
+    // /me/live-lessons juga ikut.
+    const mine = await agent()
+      .get('/api/v1/me/live-lessons')
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`);
+    expect(mine.status).toBe(200);
+    const mineById = new Map(
+      mine.body.data.map((item: { id: string; isJoinable: boolean }) => [item.id, item.isJoinable]),
+    );
+    expect(mineById.get(ongoing.id)).toBe(true);
+    expect(mineById.get(finished.id)).toBe(false);
+    // Peran pengelola tidak dapat tombol Masuk Kelas (guard join Taruna-only).
+    const mentorList = await agent()
+      .get('/api/v1/live-lessons')
+      .set('Authorization', `Bearer ${ctx.mentorToken}`);
+    const mentorById = new Map(
+      mentorList.body.data.map((item: { id: string; isJoinable: boolean }) => [item.id, item.isJoinable]),
+    );
+    expect(mentorById.get(ongoing.id)).toBe(false);
+  });
+
+  it('join: kelas yang belum dibuka/sudah selesai ditolak 409', async () => {
+    const ctx = await setup();
+    const notYet = await prisma.liveLesson.create({
+      data: {
+        cohortId: ctx.cohort.id,
+        mentorId: ctx.mentor.id,
+        title: `Tidak boleh join ${Date.now()}`,
+        startsAt: new Date(Date.now() + 2 * HOUR_MS),
+        endsAt: new Date(Date.now() + 4 * HOUR_MS),
+        roomReference: 'SPLI-TOLAK',
+        createdBy: ctx.admin.id,
+      },
+    });
+    const join = await agent()
+      .post(`/api/v1/live-lessons/${notYet.id}/join`)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .send({});
+    expect(join.status).toBe(409);
+    const record = await prisma.attendanceRecord.findUnique({
+      where: {
+        lessonId_userId: { lessonId: notYet.id, userId: ctx.taruna.id },
+      },
+    });
+    expect(record).toBeNull();
   });
 
   it('reschedule setelah batas H-1 ditolak (403); sebelum H-1 lolos', async () => {
@@ -231,14 +345,15 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
 
   it('koreksi absensi: Mentor dalam 24 jam lolos + audit; lewat 24 jam ditolak', async () => {
     const ctx = await setup();
-    const created = await createLesson(ctx.mentorToken, ctx.cohort.id, 48);
+    // Absensi perlu tercatat dulu, jadi kelas harus sedang berlangsung.
+    const created = await createOngoingLesson(ctx);
     await agent()
-      .post(`/api/v1/live-lessons/${created.body.data.id}/join`)
+      .post(`/api/v1/live-lessons/${created.id}/join`)
       .set('Authorization', `Bearer ${ctx.tarunaToken}`)
       .send({});
     const corrected = await agent()
       .patch(
-        `/api/v1/live-lessons/${created.body.data.id}/attendance/${ctx.taruna.id}`,
+        `/api/v1/live-lessons/${created.id}/attendance/${ctx.taruna.id}`,
       )
       .set('Authorization', `Bearer ${ctx.mentorToken}`)
       .send({ userId: ctx.taruna.id, status: 'EXCUSED' });
@@ -247,14 +362,14 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     expect(corrected.body.data.source).toBe('MANUAL');
     const audit = await prisma.lessonAuditLog.findFirst({
       where: {
-        lessonId: created.body.data.id,
+        lessonId: created.id,
         action: 'attendance.corrected',
       },
     });
     expect(audit).not.toBeNull();
     // Simulasi sesi berakhir >24 jam lalu → koreksi ditolak.
     await prisma.liveLesson.update({
-      where: { id: created.body.data.id },
+      where: { id: created.id },
       data: {
         startsAt: new Date(Date.now() - 30 * HOUR_MS),
         endsAt: new Date(Date.now() - 28 * HOUR_MS),
@@ -262,7 +377,7 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     });
     const late = await agent()
       .patch(
-        `/api/v1/live-lessons/${created.body.data.id}/attendance/${ctx.taruna.id}`,
+        `/api/v1/live-lessons/${created.id}/attendance/${ctx.taruna.id}`,
       )
       .set('Authorization', `Bearer ${ctx.mentorToken}`)
       .send({ userId: ctx.taruna.id, status: 'PRESENT' });
@@ -273,22 +388,22 @@ describe('Tahap 5 live lesson + absensi (e2e)', () => {
     const ctx = await setup();
     const otherMentor = await makeUser('mentor-lain', Role.MENTOR);
     const otherToken = await loginAs(otherMentor.email);
-    const created = await createLesson(ctx.mentorToken, ctx.cohort.id, 48);
+    const created = await createOngoingLesson(ctx);
     await agent()
-      .post(`/api/v1/live-lessons/${created.body.data.id}/join`)
+      .post(`/api/v1/live-lessons/${created.id}/join`)
       .set('Authorization', `Bearer ${ctx.tarunaToken}`)
       .send({});
     const recap = await agent()
-      .get(`/api/v1/live-lessons/${created.body.data.id}/attendance`)
+      .get(`/api/v1/live-lessons/${created.id}/attendance`)
       .set('Authorization', `Bearer ${ctx.mentorToken}`);
     expect(recap.status).toBe(200);
     expect(recap.body.data.length).toBe(1);
     const denied = await agent()
-      .get(`/api/v1/live-lessons/${created.body.data.id}/attendance`)
+      .get(`/api/v1/live-lessons/${created.id}/attendance`)
       .set('Authorization', `Bearer ${otherToken}`);
     expect(denied.status).toBe(403);
     const exported = await agent()
-      .get(`/api/v1/live-lessons/${created.body.data.id}/attendance/export`)
+      .get(`/api/v1/live-lessons/${created.id}/attendance/export`)
       .set('Authorization', `Bearer ${ctx.mentorToken}`);
     expect(exported.status).toBe(200);
     expect(exported.headers['content-type']).toContain('spreadsheetml');

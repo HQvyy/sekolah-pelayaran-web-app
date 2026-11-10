@@ -44,7 +44,22 @@ export function joinBlockedMessage(lesson: LiveLesson): string {
     return "Kelas sudah selesai dan absensi ditutup sesuai aturan backend.";
   }
   if (lesson.status === "RESCHEDULED") return "Jadwal berubah. Periksa waktu terbaru sebelum masuk kelas.";
-  if (!lesson.isJoinable) return "Kelas belum dapat diikuti. Tunggu waktu atau persetujuan backend.";
+  // Hanya tampilkan pesan blokir bila canJoinLesson benar-benar menolak.
+  // Sebelumnya baris ini memeriksa !lesson.isJoinable, sehingga saat backend
+  // belum mengirim field itu pesan "Kelas belum dapat diikuti" muncul walaupun
+  // tombol Masuk Kelas tampil (kontradiksi di layar).
+  if (canJoinLesson(lesson)) return "";
+  if (typeof lesson.isJoinable === "boolean") {
+    return "Kelas belum dapat diikuti. Tunggu waktu atau persetujuan backend.";
+  }
+  const now = Date.now();
+  const startsAt = new Date(lesson.startsAt).getTime();
+  const endsAt = new Date(lesson.endsAt).getTime();
+  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
+    return "Waktu kelas tidak dapat dibaca. Hubungi pengelola jadwal.";
+  }
+  if (now < startsAt - 15 * 60_000) return "Kelas belum dibuka. Tombol masuk muncul 15 menit sebelum mulai.";
+  if (now > endsAt) return "Kelas sudah selesai dan absensi ditutup sesuai aturan backend.";
   return "";
 }
 
