@@ -281,6 +281,7 @@ Keputusan: **backend menjadi sumber kebenaran** — mengirim `isJoinable` boolea
 | Bagian 2–12 pemetaan cakupan | **Selesai dipetakan** 2026-11-05 (bagian ini) |
 | Re-verifikasi lokal branch `dev` 2026-11-09 | BE typecheck/lint/unit PASS (35 test), FE typecheck/lint/test/build PASS (78 test, 0 warning); **e2e BE tidak dijalankan** (tanpa PostgreSQL) |
 | Re-verifikasi lokal branch `dev` 2026-11-10 (perbaikan BE-01) | BE typecheck/lint/unit PASS (35 test) + **e2e PASS 68 test** (PostgreSQL `spli_test`, 10 migrasi ter-apply); hanya perubahan kode pada `attempts.service.ts` + test/docs |
+| Re-verifikasi lokal branch `dev` 2026-11-10 (perbaikan BE-02, commit `123d3f4`) | BE typecheck/lint/unit PASS (35 test) + **e2e PASS 70 test** (9 suite); FE typecheck/lint/test PASS (**85 test**, 9 suite) + build PASS (81 modul). Verifikasi independen atas klaim BE-01 & BE-02; tidak ada perubahan kode fitur |
 | UAT 10 skenario frontend (§14) | **Dieksekusi sebagian 2026-11-09 di lokal** (Docker PostgreSQL + backend + Vite + seed): 1, 8, 9, 10 LOLOS; 2, 4, 5 LOLOS SEBAGIAN; 6 GAGAL (bug kritis BE-01 — kode sudah diperbaiki 2026-11-10 dan lolos e2e, UAT browser perlu diulang); 5 juga terblokir temuan BE-02 (kode sudah diperbaiki 2026-11-10 dan lolos e2e, UAT browser perlu diulang); 3 dan 7 belum dijalankan. Sisa skenario menunggu pengujian ulang 5 & 6 di browser, lalu 3 dan 7 |
 | Email nyata, malware scan, backup nyata, performa (§16–§18) | **Belum diuji** — jangan diklaim |
 | QA manual aksesibilitas/responsivitas perangkat nyata (§15) | **Belum dikerjakan** |
@@ -321,6 +322,27 @@ Perbaikan temuan BE-02: `GET /live-lessons` tidak mengirim `isJoinable`, sehingg
 4. **Test yang ditambahkan/diubah** — backend `test/live-lessons.e2e-spec.ts`: helper `createOngoingLesson(ctx)` (jadwal ONGOING dibuat via Prisma karena POST menolak waktu lampau); test `join`, koreksi absensi, dan rekap/ekspor dialihkan ke helper itu; dua test baru — `isJoinable: true hanya saat kelas berlangsung + Taruna; window waktu ditolak` (list/detail/me/mentor + assert `roomReference` tidak bocor) dan `join: kelas yang belum dibuka/sudah selesai ditolak 409` (+ assert tidak ada `attendanceRecord`). Frontend `test/live.test.tsx`: blok `describe("kelayakan masuk kelas (isJoinable)")` dengan 5 test (mengikuti server, tolak CANCELLED/FINISHED, fallback waktu, pesan blokir tidak muncul saat bisa join, pesan menjelaskan alasan) + 2 test render (tombol muncul tanpa `isJoinable`; tombol disembunyikan untuk Mentor). Catatan: helper `lessonWithoutJoinable()` wajib menghapus `isJoinable` dari payload karena `lessonPayload()` sudah memuat `isJoinable: true` sehingga spread biasa tetap membawa nilai itu.
 5. **Dokumen** — `docs/api-specification.md` §7 (ketentuan `isJoinable` + aturan join window) dan §15.4 (contoh JSON lengkap + catatan `roomReference`) diperbarui; temuan BE-02 di `docs/checklist.md` ditandai sudah diperbaiki.
 6. **Belum dikerjakan di sesi ini** — pengujian ulang UAT skenario 5 di browser (membuktikan tombol Masuk Kelas tampil), skenario 6 & 7, dan keputusan kontrak `QuestionType` (backend `PG`/`ESSAY` vs FE `MULTIPLE_CHOICE`/`ESSAY`).
+
+### Catatan verifikasi UAT skenario 5 2026-11-10 (lewat API — browser tidak tersedia di sesi ini)
+
+Browser tool tidak tersedia di lingkungan kerja ini, jadi UAT skenario 5 **belum** dijalankan lewat UI. Sebagai gantinya, jalur yang dipakai tombol "Masuk Kelas" diverifikasi langsung ke API (backend dev yang sedang berjalan, data `spli_dev`, akun `taruna@spli.local` yang ter-enroll):
+
+1. `GET /live-lessons` → **4 item, semuanya memuat `isJoinable` boolean** (sebelum perbaikan: `undefined` semua). Nilai `false` untuk status `FINISHED`/`SCHEDULED`, `true` untuk satu kelas `ONGOING` yang jendelanya saya sesuaikan ke waktu sekarang (`starts_at = now() - 10 menit`, `ends_at = now() + 50 menit`). `roomReference` tetap `undefined` untuk Taruna.
+2. `GET /live-lessons/{id}` (halaman detail) → `isJoinable=true` untuk kelas ONGOING, `roomReference` tetap tidak terkirim.
+3. `POST /live-lessons/{id}/join` saat window terbuka → **200** dengan `join.roomName`, `join.domain`, `recordedAt`; absensi tercatat (`lesson_audit_logs` bertambah entri `attendance.recorded`, `lesson_participants` ter-upsert). Baris `attendance_records` untuk Taruna + kelas ini sudah ada dari 2026-11-04 sehingga `recorded_at` tidak berubah — itu memang perilaku `upsert` (absensi tidak diduplikasi).
+4. `POST /live-lessons/{id}/join` untuk kelas `SCHEDULED` (besok) → **409 CONFLICT** "Kelas belum dibuka atau sudah selesai."; untuk kelas `FINISHED` → **409 CONFLICT** dengan pesan yang sama.
+5. Data `spli_dev` yang saya ubah untuk pengujian: satu baris `live_lessons` (`starts_at`/`ends_at` kelas ONGOING) + password demo di-reset lewat `npm run reset:demo-passwords -- --password UatSpli2026`. Keduanya hanya data uji dev, bukan perubahan kode.
+
+**Sisa yang belum terbukti:** tampilan tombol "Masuk Kelas" di UI (daftar + detail) untuk peran TARUNA, pesan blokir yang benar saat kelas di luar window, dan tombol disembunyikan untuk peran pengelola. Ini baru bisa dikunci setelah UAT browser dijalankan.
+
+### Verifikasi ulang BE-01 & BE-02 2026-11-10 (sesi terpisah, branch `dev`, commit `123d3f4`)
+
+Sesi ini tidak mengubah kode fitur; hanya menjalankan ulang seluruh gate pada commit BE-02 untuk konfirmasi independen atas klaim pada catatan di atas.
+
+1. **Backend** — `npx tsc --noEmit` PASS, `npm run lint` PASS tanpa warning, unit test PASS **35 test** (6 suite), e2e PASS **70 test** (9 suite) terhadap PostgreSQL `spli_test` (`DATABASE_URL` eksplisit; `spli_dev` tidak disentuh). Docker tidak tersedia di lingkungan ini; PostgreSQL lokal (port 5432) yang dipakai.
+2. **Frontend** — `npm run typecheck` PASS, `npm run lint` PASS, `npm run test` PASS **85 test** (9 suite), `npm run build` PASS (81 modul).
+3. **Kontrak `roomReference` (§7)** — dicek ke seluruh konsumen: frontend tidak pernah membaca field itu; satu-satunya pembaca responsnya adalah test `live-lessons.e2e-spec.ts:149` (token Admin). Kontrak final: `roomReference` hanya untuk peran pengelola, tidak pernah ke Taruna — konsisten dengan aturan "tautan konferensi tidak dibagikan" (§7) dan dengan assert test di baris 222–230. Tidak ada regresi.
+4. **Fallback waktu di `liveUtils.ts` — diputuskan TIDAK dihapus.** Sempat dicatat sebagai dead code karena backend kini selalu mengirim `isJoinable`. Setelah ditelusuri, fallback itu disengaja dipertahankan sebagai degradasi aman (respons lama/cadangan tanpa field) dan sudah diamankan 5 test unit + 1 test render. Menghapusnya akan menghilangkan lapis pertahanan tanpa keuntungan nyata, jadi dibiarkan.
 
 ### Catatan deviasi yang perlu keputusan (dari pemetaan §2–§12)
 
