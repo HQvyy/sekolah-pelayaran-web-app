@@ -197,6 +197,13 @@ lain, dan tidak pernah dijalankan otomatis.
   skor ≤ bobot, feedback); finalisasi otomatis bila semua esai dinilai.
   Antrean: `GET /mentor/essay-grading`; overdue SLA 7 hari:
   `GET /admin/assessments/overdue-grading`.
+- Respons attempt (`POST /assessments/:id/attempts` dan
+  `GET /attempts/:attemptId`) memuat soal lengkap — `questionId`, `type`
+  (`PG`/`ESSAY`), `prompt`, `options` (`id` + `label`), `selectedOptionId`,
+  `essayText`, `updatedAt` — supaya layar CBT bisa menampilkan pertanyaan.
+  Urutan mengikuti pengacakan yang dicatat per attempt, jadi resume identik
+  dengan start. **Answer key tidak pernah ikut**: `isCorrect`, `weight`, dan
+  `sortOrder` tidak dikirim ke Taruna.
 - Progres (`PASSED/FAILED`, skor terbaik, jumlah attempt) dihitung backend
   dari attempt GRADED; tidak ada nilai dari client yang dipercaya.
   `GET /me/progress`.

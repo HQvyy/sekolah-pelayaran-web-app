@@ -183,6 +183,63 @@ describe('Tahap 6 CBT slice (e2e)', () => {
     expect(res.body.error.message).toMatch(/\.xlsx/);
   });
 
+  it('attempt: prompt, tipe, dan opsi soal dikirim; answer key tidak pernah ikut', async () => {
+    const ctx = await seedCbt('KONTRAK-SOAL');
+    const started = await agent()
+      .post(`/api/v1/assessments/${ctx.assessment.id}/attempts`)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+      .send({});
+    expect(started.status).toBe(201);
+    const attemptId = started.body.data.attemptId as string;
+
+    const expected = await prisma.question.findMany({
+      where: { assessmentId: ctx.assessment.id },
+      include: { options: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    const sent = started.body.data.questions as {
+      questionId: string;
+      type: string;
+      prompt: string;
+      options: { id: string; label: string }[];
+      selectedOptionId: string | null;
+      essayText: string | null;
+    }[];
+    // Semua soal ikut, urutan mengikuti randomisasi yang tercatat.
+    expect(sent).toHaveLength(expected.length);
+    for (const item of sent) {
+      const source = expected.find((question) => question.id === item.questionId);
+      if (!source) throw new Error(`soal ${item.questionId} bukan milik assessment ini`);
+      expect(item.type).toBe(source.type);
+      expect(item.prompt).toBe(source.prompt);
+      // Esai tidak punya opsi; PG dikirim lengkap dengan label.
+      if (source.type === 'ESSAY') {
+        expect(item.options).toEqual([]);
+      } else {
+        expect(item.options).toHaveLength(source.options.length);
+        expect(item.options.map((option) => option.label).sort()).toEqual(
+          source.options.map((option) => option.label).sort(),
+        );
+      }
+      expect(item.selectedOptionId).toBeNull();
+      expect(item.essayText).toBeNull();
+    }
+
+    // Kunci jawaban tidak boleh bocor: tidak ada isCorrect/bobot/urutan soal.
+    const raw = JSON.stringify(started.body.data).toLowerCase();
+    expect(raw).not.toContain('iscorrect');
+    expect(raw).not.toContain('"weight"');
+    expect(raw).not.toContain('sortorder');
+
+    // Resume (GET) memuat kontrak yang sama, termasuk urutan opsi yang sama.
+    const resumed = await agent()
+      .get(`/api/v1/attempts/${attemptId}`)
+      .set('Authorization', `Bearer ${ctx.tarunaToken}`);
+    expect(resumed.status).toBe(200);
+    expect(resumed.body.data.assessmentId).toBe(ctx.assessment.id);
+    expect(resumed.body.data.questions).toEqual(sent);
+  });
+
   it('attempt: timer server, tanpa answer key, ownership dijaga', async () => {
     const ctx = await seedCbt('OWN');
     const started = await agent()
@@ -192,8 +249,20 @@ describe('Tahap 6 CBT slice (e2e)', () => {
     expect(started.status).toBe(201);
     expect(started.body.data.serverNow).toBeDefined();
     expect(started.body.data.expiresAt).toBeDefined();
-    // Tidak ada kunci jawaban di payload.
-    expect(JSON.stringify(started.body.data).toLowerCase()).not.toContain('jakarta');
+    // Tidak ada kunci jawaban di payload: opsi hanya berisi id + label, dan
+    // penanda kunci (isCorrect) beserta bobot/urutan soal tidak pernah ikut.
+    const sentQuestions = started.body.data.questions as {
+      options: Record<string, unknown>[];
+    }[];
+    for (const question of sentQuestions) {
+      for (const option of question.options) {
+        expect(Object.keys(option).sort()).toEqual(['id', 'label']);
+      }
+    }
+    const raw = JSON.stringify(started.body.data).toLowerCase();
+    expect(raw).not.toContain('iscorrect');
+    expect(raw).not.toContain('"weight"');
+    expect(raw).not.toContain('sortorder');
     // Orang lain tidak bisa resume attempt ini.
     const other = await makeUser('other');
     const otherToken = await loginAs(other.email);

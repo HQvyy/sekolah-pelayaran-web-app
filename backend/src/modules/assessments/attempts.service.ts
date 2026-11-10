@@ -9,6 +9,7 @@ import {
   EnrollmentStatus,
   Prisma,
   PublishStatus,
+  QuestionType,
   Role,
 } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
@@ -164,7 +165,9 @@ export class AttemptsService {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
       include: {
-        assessment: true,
+        assessment: {
+          include: { questions: { include: { options: true } } },
+        },
         answers: true,
       },
     });
@@ -179,7 +182,12 @@ export class AttemptsService {
       await this.expireAttempt(attempt.id, userId);
       const expired = await this.prisma.attempt.findUniqueOrThrow({
         where: { id: attemptId },
-        include: { assessment: true, answers: true },
+        include: {
+          assessment: {
+            include: { questions: { include: { options: true } } },
+          },
+          answers: true,
+        },
       });
       return this.serialize(expired, now, true);
     }
@@ -189,12 +197,23 @@ export class AttemptsService {
   private serialize(
     attempt: {
       id: string;
+      assessmentId: string;
       status: AttemptStatus;
       startedAt: Date;
       expiresAt: Date;
       score: number | null;
       passed: boolean | null;
-      assessment: { id: string; title: string; level: number };
+      assessment: {
+        id: string;
+        title: string;
+        level: number;
+        questions: {
+          id: string;
+          type: QuestionType;
+          prompt: string;
+          options: { id: string; label: string }[];
+        }[];
+      };
       answers: { questionId: string; optionId: string | null; essayText: string | null; updatedAt: Date }[];
     } & { shuffledQuestionIds: unknown; shuffledOptionIds: unknown },
     serverNow: Date,
@@ -203,14 +222,37 @@ export class AttemptsService {
     const shuffledQuestions = attempt.shuffledQuestionIds as string[];
     return {
       attemptId: attempt.id,
+      assessmentId: attempt.assessmentId,
       status: justExpired ? AttemptStatus.EXPIRED : attempt.status,
       serverNow: serverNow.toISOString(),
       startedAt: attempt.startedAt.toISOString(),
       expiresAt: attempt.expiresAt.toISOString(),
+      // Prompt + opsi (label saja) supaya layar CBT bisa menampilkan soal.
+      // Answer key (isCorrect), bobot, dan sortOrder TIDAK pernah dikirim.
       questions: shuffledQuestions.map((questionId) => {
         const saved = attempt.answers.find((item) => item.questionId === questionId);
+        const question = attempt.assessment.questions.find((item) => item.id === questionId);
+        if (!question) {
+          throw new NotFoundException(`Soal attempt tidak ditemukan: ${questionId}`);
+        }
+        // Opsi diurutkan sesuai shuffledOptionIds yang dicatat saat attempt
+        // dimulai, supaya resume menampilkan urutan yang sama.
+        const optionOrder = (attempt.shuffledOptionIds as Record<string, string[]>)?.[
+          questionId
+        ];
+        const orderedOptions = optionOrder
+          ? optionOrder
+              .map((optionId) => question.options.find((option) => option.id === optionId))
+              .filter((option): option is { id: string; label: string } => Boolean(option))
+          : question.options;
         return {
           questionId,
+          type: question.type,
+          prompt: question.prompt,
+          options: orderedOptions.map((option) => ({
+            id: option.id,
+            label: option.label,
+          })),
           // Hanya pilihan yang disimpan (optionId), bukan kunci jawaban.
           selectedOptionId: saved?.optionId ?? null,
           essayText: saved?.essayText ?? null,

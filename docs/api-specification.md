@@ -273,7 +273,7 @@ Ketentuan:
 | `PATCH /questions/{questionId}` | Mengubah soal | Role pengelola berwenang |
 | `DELETE /questions/{questionId}` | Menonaktifkan soal | Role pengelola berwenang |
 | `POST /assessments/{id}/attempts` | Memulai attempt; server menentukan waktu mulai/berakhir dan randomisasi | Taruna yang berhak |
-| `GET /attempts/{attemptId}` | Melanjutkan attempt; kirim jawaban tersimpan dan waktu server tersisa, tanpa answer key | Pemilik attempt; role berwenang sesuai permission |
+| `GET /attempts/{attemptId}` | Melanjutkan attempt; kirim soal (prompt/type/options), jawaban tersimpan, dan waktu server tersisa, tanpa answer key | Pemilik attempt; role berwenang sesuai permission |
 | `PUT /attempts/{attemptId}/answers/{questionId}` | Autosave jawaban satu soal | Pemilik attempt selama attempt aktif |
 | `POST /attempts/{attemptId}/submit` | Submit final secara idempotent | Pemilik attempt selama aturan mengizinkan |
 | `GET /attempts/{attemptId}/result` | Hasil attempt yang sudah boleh dilihat | Pemilik attempt/role berwenang |
@@ -291,6 +291,7 @@ Ketentuan:
 - Submit harus idempotent. Permintaan ulang tidak boleh membuat attempt atau hasil ganda.
 - Pengacakan urutan soal dan opsi dicatat per attempt sehingga attempt dapat diaudit.
 - Jawaban benar tidak boleh dikirim dalam payload Taruna sebelum kebijakan hasil mengizinkannya.
+- Soal pada respons start/resume (`POST /assessments/{id}/attempts` dan `GET /attempts/{attemptId}`) berisi `questionId`, `type` (`PG` | `ESSAY`), `prompt`, `options` (hanya `id` + `label`), `selectedOptionId`, `essayText`, dan `updatedAt`. Urutan soal dan opsi mengikuti pengacakan yang dicatat pada attempt (`shuffledQuestionIds`/`shuffledOptionIds`) sehingga resume menampilkan susunan yang sama. Field `isCorrect`, `weight`, dan `sortOrder` tidak pernah ikut.
 - Pilihan ganda dinilai otomatis; esai dinilai manual oleh mentor/pemeriksa berwenang.
 - SLA penilaian esai maksimal 7 hari kalender sejak submit; jika lewat, ditandai terlambat dan dilaporkan ke Admin.
 - Default PRD yang perlu konfirmasi: passing grade 70, maksimal 3 attempt, jeda 24 jam, remedial mengulang level.
@@ -419,7 +420,46 @@ Respons:
 }
 ```
 
-`questions` hanya berisi prompt soal dan opsi yang boleh dilihat Taruna; tidak boleh mengandung answer key, bobot tersembunyi yang mengungkap jawaban, atau data internal pemeriksaan.
+`questions` berisi soal yang boleh dilihat Taruna — `questionId`, `type` (`PG`/`ESSAY`), `prompt`, dan `options` (hanya `id` + `label`; esai mendapat array kosong). Tidak boleh mengandung answer key (`isCorrect`), `weight`, `sortOrder`, atau data internal pemeriksaan. Urutan mengikuti pengacakan yang tercatat pada attempt, jadi respons `GET /attempts/{attemptId}` identik dengan respons start:
+
+```json
+{
+  "data": {
+    "attemptId": "uuid",
+    "assessmentId": "uuid",
+    "status": "IN_PROGRESS",
+    "serverNow": "2026-10-29T07:00:30Z",
+    "startedAt": "2026-10-29T07:00:00Z",
+    "expiresAt": "2026-10-29T07:45:00Z",
+    "questions": [
+      {
+        "questionId": "uuid",
+        "type": "PG",
+        "prompt": "Ibukota Indonesia?",
+        "options": [
+          { "id": "uuid", "label": "Jakarta" },
+          { "id": "uuid", "label": "Bandung" }
+        ],
+        "selectedOptionId": null,
+        "essayText": null,
+        "updatedAt": null
+      },
+      {
+        "questionId": "uuid",
+        "type": "ESSAY",
+        "prompt": "Jelaskan keselamatan pelayaran.",
+        "options": [],
+        "selectedOptionId": null,
+        "essayText": null,
+        "updatedAt": null
+      }
+    ],
+    "score": null,
+    "passed": null
+  },
+  "meta": null
+}
+```
 
 ### 15.3 Error validasi — usulan
 
