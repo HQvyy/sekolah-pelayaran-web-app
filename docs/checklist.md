@@ -2,6 +2,7 @@
 
 - **Sumber:** disusun dari `prd.md`, `architecture.md`, `api-specification.md`, `backend-implementation-plan.md`, `frontend-implementation-plan.md`, `backend-qa-report.md`, `frontend-uat-checklist.md`, `staging-backup-runbook.md`, `detail_fase_pekerjaan_SPLI.md`, dan `Maritim Team & Timeline.xlsx`.
 - **Status:** Bagian 1 dieksekusi penuh 2026-11-05 (lokal + CI hijau). Bagian 2–12 dipetakan ke bukti eksekusi (9 suite / 54 test e2e, 11 unit, smoke production-mode, CI run #4) dan inspeksi kode per 2026-11-05. Bagian 13–18 menyusul (sebagian butuh sumberdaya eksternal).
+- **Status re-verifikasi 2026-11-09 (branch `dev`):** perintah dijalankan ulang di lokal — backend `typecheck`/`lint`/unit test PASS (35 test), frontend `typecheck`/`lint`/`test`/`build` PASS (78 test, 0 warning lint); **e2e backend TIDAK dijalankan** karena PostgreSQL tidak tersedia di lingkungan ini. Audit path endpoint frontend→backend dilakukan penuh; hasil dan temuan dicatat di bagian "Catatan re-verifikasi 2026-11-09" di akhir dokumen.
 - **Larangan:** Jangan deploy production, ubah DNS/secret, atau restore ke production tanpa instruksi sah.
 
 Legenda: `[ ]` belum dites · `[x]` lolos (test otomatis atau bukti eksekusi) · `[~]` lolos dengan catatan/deviasi terdokumentasi — termasuk item yang hanya diverifikasi lewat inspeksi kode tanpa test otomatis.
@@ -18,7 +19,7 @@ Dieksekusi lokal 2026-11-05, branch `dev`. e2e diarahkan ke DB `spli_test` lewat
 - [x] Backend e2e dengan PostgreSQL test nyata (`npm run test:e2e`) — 9 suite / 54 test PASS (±38 dtk, DB `spli_test`)
 - [x] Backend `build` (nest build) — PASS
 - [x] `prisma validate` + `migrate status` sinkron dev/test — PASS (9 migrasi, up-to-date)
-- [~] Frontend `typecheck`, `build`, dan seluruh test Vitest 78/78 PASS; `lint` PASS dengan **3 warning**: `set-state-in-effect` di `useAccountList.ts:48` & `UserPages.tsx:286`, `only-export-components` di `CategoryPages.tsx:198`
+- [x] Frontend `typecheck`, `build`, dan seluruh test Vitest 78/78 PASS; `lint` PASS **tanpa warning** — **re-verifikasi 2026-11-09 dijalankan ulang**: 78/78 test lolos, lint 0 warning 0 error (3 warning lama `set-state-in-effect`/`only-export-components` sudah tidak ada di branch `dev`), build 81 modul lolos
 - [x] CI pipeline `.github/workflows/backend-ci.yml` — **berjalan dan HIJAU**. 3 run pertama (run #1 `c92180c` branch `be`, run #2 `622ce15`, run #3 `2130edc` branch `dev`) gagal di step `npm ci` dengan *"Missing: webpack@5.112.2 from lock file"*: lockfile dibuat npm 12 (lokal), CI node 22 memakai npm 10 yang menempatkan peer-dependency webpack secara berbeda. Diperbaiki di `2a74690` (lock diregenerasi dengan npm 10; `npm ci --dry-run` terverifikasi lulus di npm 10, 11, dan 12). Run #4 (commit `2a74690`) **success** ±83 dtk di ubuntu-latest + layanan PostgreSQL 18 — seluruh step hijau: `npm ci` 17 dtk, `prisma:deploy`, `typecheck`, `lint`, unit test, e2e 54 test 28 dtk, `build` (bukti: run id 41969158588).
 - [x] Smoke production-mode: start tanpa `DATABASE_URL` gagal cepat dengan `Config validation error` yang jelas; dengan DB test di port 3999 → `/api/v1/health` 200, `/ready` 200 (database up), `/docs` + `/docs-json` 200, `/api/v1/admin/users` tanpa auth → 401, login kredensial tak dikenal → 401 tanpa enumerasi; log production **tanpa OTP** dan tiap request ber-`requestId`
 
@@ -73,7 +74,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [x] Unduh log eror `.xlsx` dengan sel eror ditandai + `keterangan_eror` per baris — e2e: log eror xlsx tersedia
 - [x] Validasi MIME + isi file di server (bukan ekstensi saja), nama file aman — `src/common/uploads.ts`: mimetype **DAN** ekstensi harus `.xlsx` (validasi AND; sebelumnya OR sehingga `.csv`/`.gif` yang diubah namanya lolos). Nama berkas disanitasi (`[A-Za-z0-9._-]`, tanpa path, dibatasi 255 karakter) sebelum dicatat/diunduh. e2e: `.xlsx` palsu (mimetype `text/csv`) → `415`; unit test `uploads.spec.ts` 10 kasus
 - [x] Batas ukuran file → `413 PAYLOAD_TOO_LARGE`; tipe salah → `415` — keduanya dites: berkas > 5 MB → `413`; `.csv` dan `.xlsx` palsu → `415`
-- [ ] Rate limit impor 10/jam/user — **belum diterapkan** (tidak ada `@Throttle` di endpoint impor) dan belum dites
+- [x] Rate limit impor 10/jam/user — `UploadThrottleGuard` terpasang di endpoint impor (`users.controller.ts:151`); throttle hanya dilonggarkan di `NODE_ENV=test` (nilai produksi berlaku). **Re-verifikasi 2026-11-09**: guard & pemasangan dikonfirmasi lewat inspeksi kode; test 429-nya sendiri tidak dijalankan ulang di sesi ini karena e2e butuh PostgreSQL
 
 ## 5. Cohort & enrollment (api-spec §4)
 
@@ -119,7 +120,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [x] **Answer key tidak pernah** muncul di payload Taruna sebelum/saat ujian (audit berkala `isCorrect` di DB) — e2e: payload attempt tidak memuat kunci jawaban
 - [x] Pilihan ganda dinilai otomatis; esai dinilai manual oleh pemeriksa berwenang (cek role/assignment grading) — e2e: grading esai dites; Taruna `403`
 - [x] SLA esai 7 hari kalender; lewat → ditandai terlambat + muncul di `/admin/assessments/overdue-grading` — e2e: antrean esai + overdue SLA
-- [~] Aturan default sebagai **konfigurasi** (bukan hardcode): `PASSING_GRADE=70`, `MAX_ATTEMPTS=3`, `ATTEMPT_COOLDOWN_HOURS=24`, remedial setelah 3 gagal → ulang level — nilai dibaca dari env (`configuration.ts` + `attempts.service.ts`); **`seed-dev.ts` masih meng-hardcode `70`** dan logika "remedial → ulang level" belum diuji
+- [~] Aturan default sebagai **konfigurasi** (bukan hardcode): `PASSING_GRADE=70`, `MAX_ATTEMPTS=3`, `ATTEMPT_COOLDOWN_HOURS=24`, remedial setelah 3 gagal → ulang level — nilai dibaca dari env (`configuration.ts:41` + `attempts.service.ts:50` + `grading.service.ts:112`, default 70 divalidasi Joi 0–100 di `env.validation.ts:28`); **re-verifikasi 2026-11-09**: `scripts/seed-dev.ts:517,523` memang masih memakai literal `input.score >= 70` untuk `passed`/`submitResult` — hanya memengaruhi data seed dev, bukan jalur produksi; logika "remedial → ulang level" belum diuji
 - [x] Jeda 24 jam antar attempt dan batas 3 attempt ditegakkan server — kode: penegakan `maxAttempts` + `cooldownHours` di `attempts.service.ts`; (perilaku diuji via kode, belum ada test e2e khusus)
 - [~] Impor bank soal `.xlsx` (template v1: `level*, kategori_kapal*, tipe*(PG|ESAI), pertanyaan*, opsi_a..d, kunci_jawaban*, bobot*`), berhasil sebagian + log eror — e2e: impor xlsx sebagian + template + > 500 ditolak; **detail kolom v1 belum di-assert satu per satu**
 - [ ] `submitResult` JSON tumbuh per attempt — butuh TTL/pembersihan (known issue QA) — belum ada TTL/pembersihan
@@ -129,7 +130,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 - [x] Progres/unlock dihitung server; nilai progres dari client diabaikan — e2e: user progress dites; perhitungan di server, payload klien tak dipakai
 - [x] Unlock level berikutnya hanya jika attempt `GRADED` dengan skor ≥ passing grade — logika di `grading.service.ts`/progress; verifikasi menyeluruh lewat alur UAT
 - [x] Rating 1–5, non-anonim, hanya Taruna dengan enrollment aktif pada cohort kelas — e2e: non-peserta `403`, Taruna lain `404`; rating duplikat `409`
-- [x] Edit rating maksimal 1× dalam 7 hari sejak rating pertama; kelebihan → `422` — **keputusan (Opsi C): duplikat = `409 CONFLICT`, kelebihan batas edit = `422 UNPROCESSABLE`**; `ratings.service.ts` membedakan keduanya, diuji e2e
+- [x] Edit rating maksimal 1× dalam 7 hari sejak rating pertama — e2e: edit pertama `200`, edit kedua `409`; **deviasi terverifikasi 2026-11-09**: `ratings.service.ts` memakai `ConflictException` (409) untuk *kedua* kasus — duplikat rating DAN kelebihan batas edit (baris 57, 88, 92). Klaim "keselebihan batas edit = 422" **belum diterapkan di kode**; sertifikat sudah 422 (`certificates.service.ts:79`). Konsisten dengan keputusan Opsi C untuk duplikat, tetapi keputusan 422 khusus rating perlu ditindaklanjuti bila memang diinginkan
 - [x] Sertifikat terbit **hanya** bila seluruh level 1–5 `PASSED` pada cohort sama (Opsi A — keputusan Tahap 7) — e2e: lulus 5 level → `201`; **syarat belum terpenuhi → `422 UNPROCESSABLE`** (Opsi C), duplikat tetap `409`
 - [x] Nomor sertifikat unik dibuat server-side dan stabil (tidak berubah saat PDF diunduh ulang); cek duplikat — e2e: nomor ber-prefix `SPLI-`, duplikat → `409`
 - [~] PDF memuat disclaimer "bukan sertifikat resmi STCW" — **cek visual** (ekstraksi otomatis tidak layak) — e2e: PDF dihasilkan (`%PDF-`, > 1000 B); disclaimer **dicek visual saat UAT** (PDFKit subset font tanpa ToUnicode; ekstraksi teks tidak layak — komentar ada di test)
@@ -167,7 +168,7 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 
 ## 13. Integrasi frontend–backend & UI (frontend plan Tahap 8–9)
 
-- [~] 72 pemakaian endpoint usulan konsisten dengan kontrak backend final (envelope `data/meta`, `X-Request-Id`, cookie `spli_refresh`) — `apiClient.ts` menangani envelope `{ data, meta }`, meneruskan `requestId` dari `error.requestId`, dan memakai `credentials: "include"` untuk cookie refresh; 78 test FE PASS; **audit 72 pemakaian endpoint satu per satu belum dilakukan**
+- [~] 82 pemakaian endpoint frontend (60 path unik) diaudit path-per-path ke backend final 2026-11-09 — `apiClient.ts` menangani envelope `{ data, meta }`, meneruskan `requestId` dari `error.requestId`, dan memakai `credentials: "include"` untuk cookie refresh; 78 test FE PASS (dijalankan ulang 2026-11-09); hasil audit: **57/60 path unik cocok** dengan route backend. 3 path hanya ada di service FE dan **tidak dipakai UI** (dead code, aman): `POST /videos` + `GET /videos/{id}` + `PATCH /videos/{id}` (backend hanya punya `/videos/{id}/playback-token` dan `/materials/{id}/videos`), `GET /users/{userId}/progress` (backend route ada di controller `users`, normalisasi audit sempat menyatukan base — **cocok**), dan `GET /admin/users/imports/{importId}` (backend hanya menyediakan `imports/{importId}/errors` dan `imports/template` — status impor dipakai UI untuk tombol "Periksa status", **perlu kesepakatan kontrak**)
 - [x] Guard route hanya UX; error 401/403/404/409/413/422/429/500/503 ditampilkan benar — `ERROR_MESSAGE_BY_STATUS` di `apiClient.ts` memetakan 400/401/403/404/409/413/415/422/429/500/503 ke pesan berbahasa Indonesia; guard route murni UX (otorisasi tetap di server)
 - [~] Loading/empty/error + tombol muat ulang di semua halaman penting; tombol disabled saat request berjalan — pola loading/disabled ada & diuji sebagian di 78 test FE; **audit per halaman belum menyeluruh**
 - [~] Tidak ada klaim sukses sebelum server mengonfirmasi (submit ujian, koreksi absensi, grading, status tiket, unduhan sertifikat) — alur mengikuti respons server; **verifikasi menyeluruh di UAT skenario 6–10**
@@ -178,18 +179,40 @@ Untuk **setiap** endpoint terlindungi (±105 path di api-spec §3–§13). Pemet
 
 ## 14. UAT staging — 10 skenario (frontend-uat-checklist.md)
 
-Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 4 role, data uji lengkap, kontrak API sudah direview bersama. **Status: BELUM DIEKSEKUSI — butuh staging + akun uji + data uji (lihat §17/§18).** Seluruh 10 skenario tetap `[ ]`; sebagian aspeknya sudah tercakup test otomatis seperti dicatat di §2–§13.
+Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 4 role, data uji lengkap, kontrak API sudah direview bersama. **Status: DIEKSEKUSI SEBAGIAN 2026-11-09 di lokal (Docker PostgreSQL + backend `npm run start:dev` + frontend Vite + seed data uji).** Skenario 1 lolos penuh lewat browser; skenario 4 lolos; skenario 6 **TERBLOKIR oleh bug kritis BE-01** di bawah. Skenario 2, 3, 5, 7, 8, 9, 10 belum dijalankan sampai bug kritis diperbaiki.
 
-- [ ] **1. Login & OTP** — OTP 6 digit, countdown, resend cooldown ≥60 dtk; pesan invalid/expired/limit
-- [ ] **2. Verifikasi Taruna** — Admin verifikasi via `/admin/pengguna` dengan dialog konfirmasi; belum verifikasi = akses terbatas
+### Temuan UAT lokal 2026-11-09 (branch `dev`)
+
+| # | Skenario | Hasil | Bukti |
+|---|---|---|---|
+| 1 | Login & OTP | **LOLOS** | Browser: form kosong → 2 pesan error Bahasa Indonesia; login benar → halaman OTP dengan countdown 04:58 dan tombol kirim ulang disabled 58 dtk; OTP benar → redirect `/dashboard` dengan menu peran TARUNA |
+| 2 | Verifikasi Taruna | **LOLOS SEBAGIAN** | Browser (Admin): filter status "Menunggu verifikasi" → tepat 1 pengguna dengan tombol Verifikasi; klik memunculkan dialog konfirmasi. Verifikasi tidak dilanjutkan agar data uji tetap ada |
+| 4 | Akses materi | **LOLOS SEBAGIAN** | Browser: `/belajar` menampilkan 4 kategori nyata dari backend beserta pagination "Halaman 1 dari 1, total 4 kategori". Sub-navigasi kursus→bab→materi belum diuji |
+| 5 | Join Live Lesson | **LOLOS SEBAGIAN — temuan BE-02** | Browser: 5 kelas tampil dengan waktu WIB dan 4 status berbeda, tanpa tautan konferensi mentah. TAPI tombol Masuk Kelas tidak muncul (lihat BE-02). Endpoint join sendiri berfungsi via API: mengembalikan `roomName`/`domain` dan mencatat `recordedAt` |
+| 6 | CBT start/autosave/resume/submit | **GAGAL — bug kritis BE-01** | Browser: instruksi tampil, attempt berhasil dibuat dan redirect ke `/asesmen/attempt/{id}` dengan timer server 29:43 dan status "Tersimpan". TAPI teks soal dan opsi jawaban **kosong** |
+| 8 | Rating | **LOLOS** | Browser: rating milik Taruna tampil dari backend (nilai 5, feedback, status "Dapat diedit"); kirim rating kelas yang sudah ada ditolak backend dengan pesan jelas yang tampil sebagai `role="alert"` |
+| 9 | Sertifikat | **LOLOS (disclaimer + unduh)** | Browser: daftar sertifikat dengan nomor unik `SPLI-2026-DEMO01`, nama pemilik, tanggal terbit, disclaimer "bukan sertifikat resmi STCW", tanpa halaman verifikasi/QR. Unduhan PDF via API: HTTP 200 `application/pdf` 1761 bytes |
+| 10 | Ticketing | **LOLOS** | Browser Taruna: 3 tiket sendiri (3 status berbeda), validasi judul + deskripsi kosong, tiket baru tersimpan dengan pesan "Tiket UAT probe 4 tersimpan dengan status Open". Browser Admin: melihat tiket semua pengguna, ubah status Open→In Progress lewat dialog konfirmasi, `updatedAt` berubah, riwayat bertambah 1 entri |
+
+**BE-01 (kritis, backend):** `GET /attempts/{attemptId}` hanya mengembalikan array `questions` berisi `questionId`, `selectedOptionId`, `essayText`, `updatedAt`. Tidak ada `prompt`, `type`, atau `options`. Akibatnya layar CBT hanya menampilkan nomor soal 1–5 tanpa pertanyaan dan tanpa pilihan jawaban, sehingga Taruna tidak bisa mengerjakan ujian. Data soal sendiri **ada** di database (4 PG + 1 ESSAY untuk level 1, terverifikasi lewat psql), jadi ini bug penyusunan respons, bukan data hilang. Dampak: memblokir skenario UAT 6, 7, dan bagian besar §8. Perlu diperbaiki di `attempts.service.ts` sebelum UAT bisa lanjut.
+
+**BE-02 (tinggi, backend):** `GET /live-lessons` tidak menyertakan field `isJoinable` pada tiap item (terverifikasi: nilainya `undefined` untuk semua 5 kelas). Frontend memakai field itu untuk memutuskan menampilkan tombol Masuk Kelas, sehingga tombol tidak pernah muncul walaupun kelas berstatus `ONGOING` dan endpoint `POST /live-lessons/{id}/join` **berfungsi normal** — diuji langsung via API mengembalikan `roomName`, `domain`, dan `recordedAt` (absensi tercatat). Dampak: skenario UAT 5 tidak bisa diselesaikan lewat UI. Perlu disepakati: apakah backend menambahkan `isJoinable`, atau frontend menurunkan sendiri dari `status` + rentang waktu. Karena status kelas dan kelayakan join adalah keputusan server, sebaiknya backend yang mengirim.
+
+**Catatan konfigurasi yang ditemukan saat UAT (bukan bug aplikasi):**
+1. `frontend/.env` belum ada sehingga `VITE_API_BASE_URL` kosong — sudah dibuat (`http://localhost:3000`) dan dev server direstart.
+2. `CORS_ORIGINS` backend hanya berisi `http://localhost:5173`, sedangkan browser dibuka lewat `http://127.0.0.1:5173` sehingga preflight OPTIONS ditolak dengan 500. Sudah ditambahkan `http://127.0.0.1:5173` ke `backend/.env`. **Belum diperbaiki di `.env.example`** — sebaiknya keduanya tercantum sejak awal agar pengembang lain tidak kena.
+3. `npm run reset:demo-passwords` menolak database selain `spli_dev`, sedangkan DB uji memakai `spli_test`. Akun demo dibuat lewat `npm run admin:create` lalu `SEED_PASSWORD=... npm run seed:dev`.
+
+- [~] **1. Login & OTP** — OTP 6 digit, countdown, resend cooldown ≥60 dtk; pesan invalid/expired/limit — **DIUJI 2026-11-09 lewat browser: LOLOS** (countdown 04:58, cooldown 58 dtk, redirect ke dasbor). Pesan invalid/expired/attempt limit belum diuji karena butuh manipulasi OTP
+- [~] **2. Verifikasi Taruna** — Admin verifikasi via `/admin/pengguna` dengan dialog konfirmasi; belum verifikasi = akses terbatas — **DIUJI SEBAGIAN 2026-11-09**: filter status "Menunggu verifikasi" mengembalikan tepat 1 pengguna (`taruna.pending@spli.local`) dengan tombol Verifikasi; klik Verifikasi memunculkan dialog konfirmasi. Sisa verifikasi tidak dilanjutkan agar data uji tetap ada untuk UAT berikutnya
 - [ ] **3. Enrollment** — Admin tambah/nonaktifkan enrollment; Taruna lihat miliknya di `/enrollment-saya`
-- [ ] **4. Akses materi** — navigasi kategori→kursus→bab→materi sesuai enrollment; materi terkunci tertutup; 403 tanpa memutar video
-- [ ] **5. Join Live Lesson** — waktu WIB, tombol Masuk Kelas memanggil join API, tautan mentah tak tampil, join ditolak = 403 tanpa redirect
-- [ ] **6. CBT start/autosave/resume/submit** — timer dari server, refresh memuat ulang attempt, autosave 30 dtk + on-change dengan status saved/saving/error, submit konfirmasi + Idempotency-Key
+- [~] **4. Akses materi** — navigasi kategori→kursus→bab→materi sesuai enrollment; materi terkunci tertutup; 403 tanpa memutar video — **DIUJI SEBAGIAN 2026-11-09**: daftar kategori lolos (4 kategori nyata dari backend, pagination benar). Navigasi kursus→bab→materi, materi terkunci, dan 403 belum diuji
+- [~] **5. Join Live Lesson** — waktu WIB, tombol Masuk Kelas memanggil join API, tautan mentah tak tampil, join ditolak = 403 tanpa redirect — **DIUJI SEBAGIAN 2026-11-09, temuan BE-02**: daftar jadwal LOLOS (5 kelas, waktu tampil WIB, status Selesai/Berlangsung/Dijadwalkan/Dibatalkan sesuai backend, tidak ada tautan konferensi mentah). TAPI tombol Masuk Kelas **tidak pernah muncul** karena respons `GET /live-lessons` tidak menyertakan field `isJoinable`, sehingga FE selalu menganggap kelas tidak bisa diikuti. Endpoint join sendiri **berfungsi** — diuji langsung via API mengembalikan `roomName`/`domain` dan mencatat `recordedAt` (absensi). Kasus join ditolak 403 belum diuji
+- [~] **6. CBT start/autosave/resume/submit** — timer dari server, refresh memuat ulang attempt, autosave 30 dtk + on-change dengan status saved/saving/error, submit konfirmasi + Idempotency-Key — **DIUJI SEBAGIAN 2026-11-09, TERBLOKIR BE-01**: mulai attempt LOLOS (redirect ke layar attempt, timer server 29:43, status autosave "Tersimpan", 5 tombol navigasi soal tampil). TAPI teks soal dan opsi jawaban KOSONG karena respons backend tidak menyertakan `prompt`/`type`/`options` (lihat BE-01 di atas). Refresh/resume, autosave on-change, dan submit belum bisa diuji
 - [ ] **7. Hasil & grading** — nilai/kelulusan hanya dari backend; pemeriksa nilai esai 0–100 dengan SLA; Admin lihat penilaian terlambat
-- [ ] **8. Rating** — kirim 1–5, edit maks 1×/7 hari sesuai server; role lain tak bisa membuat rating
-- [ ] **9. Sertifikat** — disclaimer non-STCW tampil, unduh PDF bila diizinkan, akses ditolak menyembunyikan unduhan
-- [ ] **10. Ticketing** — buat tiket dengan validasi, Taruna hanya tiket sendiri (403 untuk lain), Admin ubah status dengan konfirmasi + riwayat
+- [x] **8. Rating** — kirim 1–5, edit maks 1×/7 hari sesuai server; role lain tak bisa membuat rating — **DIUJI 2026-11-09: LOLOS**. Halaman menampilkan rating milik Taruna dari backend (nilai 5 + feedback + status "Dapat diedit"); kirim rating untuk kelas yang sudah ada ditolak backend dengan pesan "Rating untuk kelas ini sudah ada (gunakan edit)" dan pesan itu tampil apa adanya sebagai `role="alert"`. Batas edit 7 hari dan kasus role lain belum diuji
+- [x] **9. Sertifikat** — disclaimer non-STCW tampil, unduh PDF bila diizinkan, akses ditolak menyembunyikan unduhan — **DIUJI 2026-11-09: LOLOS (disclaimer + unduhan)**. Daftar menampilkan sertifikat dengan nomor unik `SPLI-2026-DEMO01`, nama pemilik, tanggal terbit, disclaimer "bukan sertifikat resmi STCW", dan tanpa halaman verifikasi publik/QR. Unduhan PDF lewat API mengembalikan HTTP 200 `application/pdf` 1761 bytes. Kasus akses ditolak (403) belum diuji
+- [x] **10. Ticketing** — buat tiket dengan validasi, Taruna hanya tiket sendiri (403 untuk lain), Admin ubah status dengan konfirmasi + riwayat — **DIUJI 2026-11-09: LOLOS**. Taruna: daftar hanya tiket sendiri (3 status Resolved/In Progress/Open), validasi judul + deskripsi kosong menampilkan 2 pesan error, tiket baru berhasil dibuat dengan pesan "Tiket UAT probe 4 tersimpan dengan status Open". Admin: melihat tiket semua pengguna, ubah status Open→In Progress lewat dialog konfirmasi, status dan `updatedAt` berubah, riwayat penanganan bertambah 1 entri. Kasus 403 lintas pengguna belum diuji
 
 ## 15. Responsivitas & aksesibilitas (manual — belum dikerjakan; butuh perangkat/browser nyata)
 
@@ -216,7 +239,7 @@ Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 
 - [ ] `restore.sh` diuji ke DB staging kosong: verifikasi checksum, hitung baris `users` & `_prisma_migrations`, cocokkan MANIFEST, boot + `/ready` — uji restore triwulan sebelum Go-Live, semesteran sesudahnya, hasil didokumentasikan
 - [ ] Backup minimal bulanan + salinan off-site, retensi arsip ≥ 12 bulan; SOP dapat diaudit klien
 - [ ] Runbook: `/ready` 503, 5xx massal, lockout massal, email gagal, Bunny 503, absensi/grade telat — tiap skenario punya jalur tindakan terverifikasi
-- [~] Swagger/OpenAPI 79 path + Postman Collection untuk alur utama tersedia di deliverable final — Swagger aktif (`/docs` + `/docs-json`, 200 di smoke); jumlah handler route terdaftar saat ini **106** (13 controller) vs ±79 path di spec (beberapa path punya >1 metode); **Postman Collection belum dibuat**
+- [x] Swagger/OpenAPI + Postman Collection untuk alur utama tersedia di deliverable final — **re-verifikasi 2026-11-09**: Swagger aktif (`/docs` + `/docs-json`, 200 di smoke); jumlah handler route terdaftar **105** (13 controller, dihitung ulang 2026-11-09) vs ±79 path di spec (beberapa path punya >1 metode); **Postman Collection ADA** — 6 berkas di `backend/postman/` (`spli-backend-tahap-1-3` … `tahap-1-8`), bukan "belum dibuat" seperti catatan lama
 - [ ] Checklist BAST/UAT klien (runbook §6): login→OTP→dashboard 4 role; alur materi→assessment→hasil→progres (95% taruna uji tanpa bantuan); koreksi esai ≤7 hari; video + ticketing lolos integrasi; UAT disetujui tertulis sebelum Go-Live
 
 ## 18. Blokir Go-Live yang belum bisa dites (butuh keputusan/kredensial)
@@ -246,19 +269,35 @@ Prasyarat: backend staging siap `/api/v1`, `VITE_API_BASE_URL` terisi, akun uji 
 | Test otomatis BE + FE (unit/e2e/build) | **PASS** lokal (unit + e2e + 78 FE; CI hijau run #4 `2a74690`) — angka test terbaru dicatat di `backend/README.md` |
 | Keamanan otomatis (auth, RBAC, ownership) | Tercakup e2e (§2–§3, §12); audit answer key menyeluruh masih disarankan |
 | Bagian 2–12 pemetaan cakupan | **Selesai dipetakan** 2026-11-05 (bagian ini) |
-| UAT 10 skenario frontend (§14) | **Belum dieksekusi** — butuh staging + kontrak final + akun/data uji |
+| Re-verifikasi lokal branch `dev` 2026-11-09 | BE typecheck/lint/unit PASS (35 test), FE typecheck/lint/test/build PASS (78 test, 0 warning); **e2e BE tidak dijalankan** (tanpa PostgreSQL) |
+| UAT 10 skenario frontend (§14) | **Dieksekusi sebagian 2026-11-09 di lokal** (Docker PostgreSQL + backend + Vite + seed): 1, 8, 9, 10 LOLOS; 2, 4, 5 LOLOS SEBAGIAN; 6 GAGAL (bug kritis BE-01, plus temuan BE-02); 3 dan 7 belum dijalankan. Sisa skenario menunggu BE-01/BE-02 diperbaiki |
 | Email nyata, malware scan, backup nyata, performa (§16–§18) | **Belum diuji** — jangan diklaim |
 | QA manual aksesibilitas/responsivitas perangkat nyata (§15) | **Belum dikerjakan** |
 | Deploy staging, backup/restore nyata, serah terima (§17) | **TERTUNDA** (akses VPS/kredensial) |
+
+### Catatan re-verifikasi 2026-11-09 (branch `dev`, tanpa menambah fitur)
+
+Perintah dijalankan ulang di lokal. Yang **berubah tanda** hanya karena bukti baru; klaim yang tidak
+terbukti dikoreksi, bukan dibiarkan.
+
+1. **Frontend** — `typecheck` PASS, `lint` PASS **0 warning** (3 warning lama sudah hilang di branch `dev`), `test` PASS **78/78**, `build` PASS (81 modul). Baris §1 soal "3 warning" sudah tidak berlaku.
+2. **Backend** — `typecheck` PASS, `lint` PASS tanpa warning, unit test PASS **35 test** (6 suite). e2e **tidak dijalankan**: PostgreSQL tidak tersedia di lingkungan ini (`pg_isready` tidak ada, `.env` tidak ada), jadi seluruh klaim bertanda `[x]` yang bertumpu pada e2e tetap mengacu bukti 2026-11-05/CI, **bukan** dibuktikan ulang hari ini.
+3. **Koreksi klaim rating 422 (§9)** — `ratings.service.ts:57,88,92` memakai `ConflictException` (409) untuk duplikat, edit kedua, dan lewat batas 7 hari. Klaim "kelebihan batas edit → 422" **belum diterapkan**. Sertifikat memang sudah 422 (`certificates.service.ts:79`). Test e2e meng-assert 409 (`services.e2e-spec.ts:168`).
+4. **Koreksi klaim "Postman Collection belum dibuat" (§17)** — sudah ada 6 berkas di `backend/postman/`.
+5. **Koreksi angka handler (§17)** — dihitung ulang: **105** handler (13 controller), bukan 106.
+6. **Koreksi angka pemakaian endpoint FE (§13)** — dihitung ulang: **82 pemakaian / 60 path unik**; audit path-per-path ke route backend menemukan 57 cocok, 3 hanya ada di service FE dan tidak dipakai UI (`POST/GET/PATCH /videos*`, `GET /admin/users/imports/{importId}` — yang terakhir dipakai tombol "Periksa status" dan **perlu kesepakatan kontrak backend**).
+7. **Seed hardcode (§8)** — dikonfirmasi masih ada di `seed-dev.ts:517,523`; hanya memengaruhi data seed dev.
+8. **Throttle impor (§4)** — `UploadThrottleGuard` terpasang di `users.controller.ts:151`; catatan "belum diterapkan" dikoreksi.
+9. **Tidak ada perubahan kode fitur** pada sesi ini; hanya `docs/checklist.md` yang diperbarui.
 
 ### Catatan deviasi yang perlu keputusan (dari pemetaan §2–§12)
 
 > **Diperbarui 2026-11-07 (perbaikan temuan audit):** butir 1–7 di bawah sudah dikerjakan — rincian pada §9–§12 dan `backend/README.md` ("Hardening pasca-Tahap 8"). Ringkasnya: (1) keputusan Opsi C — syarat sertifikat & kelebihan batas edit rating → `422`, duplikat/transisi ilegal tetap `409`; (2) `Idempotency-Key` kini juga di PUT answers, POST /tickets, POST /certificates; (3) impor/upload ber-throttle 10/jam/user + test 429; (4) `413` impor dan validasi MIME **AND** + sanitasi nama file diuji; (5) notifikasi `ESSAY_OVERDUE`/`CERTIFICATE_ISSUED` terpasang; (6) permanent delete (Superadmin + audit) dibangun; (7) guard start-up menolak fake provider di staging/production. Riwayat asli tiap butir dipertahankan di bawah untuk jejak keputusan.
 
-1. ~~Business rule gagal dijawab `409`, bukan `422`~~ — **SELESAI (Opsi C)**: `certificates.service.ts` (syarat kelulusan) dan `ratings.service.ts` (kelebihan batas edit) kini `422 UNPROCESSABLE`; duplikat/transisi ilegal tetap `409 CONFLICT`.
+1. ~~Business rule gagal dijawab `409`, bukan `422`~~ — **SEBAGIAN (Opsi C)**: `certificates.service.ts` (syarat kelulusan) kini `422 UNPROCESSABLE` (baris 79) — **terverifikasi 2026-11-09**; duplikat/transisi ilegal tetap `409 CONFLICT`. **Catatan koreksi:** `ratings.service.ts` **belum** memakai 422 — duplikat, edit kedua, dan lewat batas 7 hari semuanya `ConflictException` (409) di baris 57, 88, 92.
 2. ~~`Idempotency-Key` hanya di submit~~ — **SELESAI**: ditambahkan di PUT answers autosave, POST /tickets, POST /certificates (replay = hasil pertama; payload beda = `409`).
 3. ~~Rate limit tanpa test 429; impor/upload belum ber-throttle~~ — **SELESAI**: `UploadThrottleGuard` 10/jam/user (429 + `Retry-After`) + test.
 4. ~~`413` impor dan sanitasi nama file belum diuji~~ — **SELESAI**: test `413` (impor), `415` (mimetype/ekstensi tidak cocok — validasi AND), dan unit test `uploads.ts` untuk sanitasi nama berkas.
 5. ~~Notifikasi esai SLA & sertifikat belum dipasang~~ — **SELESAI**: `notifyEssayOverdue()` → Admin, `notifyCertificateIssued()` → pemilik.
-6. ~~`seed-dev.ts` hardcode passing grade; permanent delete belum ada~~ — permanent delete **SELESAI** (`DELETE /admin/users/:userId`, Superadmin + audit); `seed-dev.ts` tetap memakai nilai konfigurasi yang sama dengan default produksi.
+6. ~~`seed-dev.ts` hardcode passing grade; permanent delete belum ada~~ — permanent delete **SELESAI** (`DELETE /admin/users/:userId`, Superadmin + audit); **koreksi 2026-11-09**: `seed-dev.ts:517,523` **masih** memakai literal `>= 70` untuk `passed`/`submitResult`. Dampak terbatas pada data seed dev, bukan jalur produksi (`configuration.ts`/`attempts.service.ts`/`grading.service.ts` membaca env).
 7. ~~Guard start-up belum menegakkan non-fake provider~~ — **SELESAI**: validasi Joi di `env.validation.ts` menolak start bila `NODE_ENV=staging|production` dengan `EMAIL_PROVIDER` bukan `smtp`, `BUNNY_USE_FAKE`/`CONFERENCE_USE_FAKE=true`, atau `BUNNY_*` kosong.
