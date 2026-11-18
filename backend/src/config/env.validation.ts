@@ -29,6 +29,9 @@ export const validationSchema = Joi.object({
   MAX_ATTEMPTS: Joi.number().integer().min(1).default(3),
   ATTEMPT_COOLDOWN_HOURS: Joi.number().min(0).default(24),
   REMEDIAL_AFTER_FAILURES: Joi.number().integer().min(1).default(3),
+  // Retensi submitResult (hari) sebelum dibersihkan scheduler. Batas bawah 1
+  // hari: nilai lebih kecil berisiko menghapus hasil yang masih bisa di-replay.
+  SUBMIT_RESULT_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   // Provider email: 'fake' hanya untuk dev/test. Di production aplikasi TIDAK
   // BOLEH start dengan provider palsu (OTP/reset tercetak ke log, tidak terkirim).
   EMAIL_PROVIDER: Joi.when('NODE_ENV', {

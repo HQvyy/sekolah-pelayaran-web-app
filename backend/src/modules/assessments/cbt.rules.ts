@@ -8,6 +8,12 @@ export const CBT_RULES = {
   MAX_DURATION_MINUTES: 24 * 60,
   ESSAY_SLA_DAYS: 7,
   IMPORT_MAX_ROWS: 500,
+  // Umur maksimum submitResult sebelum dibersihkan scheduler (hari). Nilai
+  // default hanya dokumentasi; operasional dibaca dari env
+  // SUBMIT_RESULT_RETENTION_DAYS (lihat config/configuration.ts). Batas bawah
+  // dijaga 1 hari agar salah konfigurasi tidak menghapus hasil yang masih
+  // mungkin di-replay.
+  SUBMIT_RESULT_RETENTION_DAYS_MIN: 1,
   IMPORT_MAX_FILE_BYTES: 5 * 1024 * 1024,
   IMPORT_MINE_TYPES: [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -35,5 +41,6 @@ export const CBT_AUDIT_ACTIONS = {
   ATTEMPT_EXPIRED: 'attempt.expired',
   ESSAY_GRADED: 'essay.graded',
   ESSAY_OVERDUE: 'essay.overdue',
+  SUBMIT_RESULT_PURGED: 'attempt.submit_result_purged',
   PROGRESS_UPDATED: 'progress.updated',
 } as const;

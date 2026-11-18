@@ -5,8 +5,11 @@ import { AssessmentsService } from './assessments.service';
 import { GradingService } from './grading.service';
 import { BankImportService } from './bank-import.service';
 import { BankTemplateService } from './bank-template.service';
+import { SubmitResultRetentionService } from './submit-result-retention.service';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
+  imports: [AuditModule],
   controllers: [AssessmentsController],
   providers: [
     AttemptsService,
@@ -14,6 +17,7 @@ import { BankTemplateService } from './bank-template.service';
     GradingService,
     BankImportService,
     BankTemplateService,
+    SubmitResultRetentionService,
   ],
   exports: [AttemptsService, AssessmentsService, GradingService],
 })

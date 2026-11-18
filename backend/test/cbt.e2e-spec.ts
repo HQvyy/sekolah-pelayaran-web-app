@@ -5,6 +5,8 @@ import ExcelJS from 'exceljs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { FakeEmailService } from '../src/modules/notifications/fake-email.service';
+import { SubmitResultRetentionService } from '../src/modules/assessments/submit-result-retention.service';
+import { CBT_AUDIT_ACTIONS } from '../src/modules/assessments/cbt.rules';
 import { AccountStatus, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -495,5 +497,86 @@ describe('Tahap 6 CBT slice (e2e)', () => {
       where: { attemptId_questionId: { attemptId, questionId: essay!.id } },
     });
     expect(answer?.essayText).toBe('Jawaban final.');
+  });
+
+  // Known issue QA: submitResult (JSON hasil submit untuk replay idemponen)
+  // tumbuh per attempt. Solusinya retensi terjadwal — HANYA kolom JSON yang
+  // dikosongkan; attempt, skor, status, dan jawaban tidak boleh hilang.
+  describe('retensi submitResult (scheduler)', () => {
+    async function seedSubmittedAttempt(tag: string, daysAgo: number) {
+      const ctx = await seedCbt(`ret-${tag}`);
+      const started = await agent()
+        .post(`/api/v1/assessments/${ctx.assessment.id}/attempts`)
+        .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+        .send({});
+      const attemptId = started.body.data.attemptId as string;
+      await agent()
+        .put(`/api/v1/attempts/${attemptId}/answers/${ctx.essay.id}`)
+        .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+        .send({ essayText: 'Jawaban esai.' });
+      const submitted = await agent()
+        .post(`/api/v1/attempts/${attemptId}/submit`)
+        .set('Authorization', `Bearer ${ctx.tarunaToken}`)
+        .send({});
+      expect(submitted.status).toBe(200);
+      // Mundurkan submittedAt ke masa lalu (melebihi retensi) agar job
+      // pembersih menganggapnya kedaluwarsa.
+      const submittedAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+      await prisma.attempt.update({
+        where: { id: attemptId },
+        data: { submittedAt },
+      });
+      return { ctx, attemptId, submittedAt };
+    }
+
+    it('membersihkan submitResult lama tanpa menghapus attempt/skor/jawaban', async () => {
+      const { attemptId } = await seedSubmittedAttempt('lama', 200);
+
+      const before = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+      expect(before.submitResult).not.toBeNull();
+
+      const retention = app.get(SubmitResultRetentionService);
+      await retention.purgeExpiredSubmitResults();
+
+      const after = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+      // Kolom JSON dibersihkan...
+      expect(after.submitResult).toBeNull();
+      // ...tapi baris attempt dan seluruh hasil ujian tetap utuh.
+      expect(after.id).toBe(attemptId);
+      expect(after.status).toBe(before.status);
+      expect(after.score).toBe(before.score);
+      expect(after.passed).toBe(before.passed);
+      expect(after.submittedAt).toEqual(before.submittedAt);
+      expect(await prisma.answer.count({ where: { attemptId } })).toBe(1);
+    });
+
+    it('membiarkan submitResult yang masih dalam masa retensi', async () => {
+      const { attemptId } = await seedSubmittedAttempt('baru', 10);
+
+      const retention = app.get(SubmitResultRetentionService);
+      await retention.purgeExpiredSubmitResults();
+
+      const after = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+      expect(after.submitResult).not.toBeNull();
+    });
+
+    it('menulis audit log saat ada yang dibersihkan', async () => {
+      const { attemptId } = await seedSubmittedAttempt('audit', 200);
+
+      const retention = app.get(SubmitResultRetentionService);
+      await retention.purgeExpiredSubmitResults();
+
+      const log = await prisma.auditLog.findFirst({
+        where: { action: CBT_AUDIT_ACTIONS.SUBMIT_RESULT_PURGED },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(log).not.toBeNull();
+      expect(log?.metadata).toMatchObject({ retentionDays: 90 });
+      // Metadata audit tidak memuat isi submitResult (tidak ada skor/jawaban).
+      expect(JSON.stringify(log?.metadata)).not.toContain('score');
+      // Attempt benar-benar sudah dibersihkan.
+      const after = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+      expect(after.submitResult).toBeNull();
+    });
   });
 });

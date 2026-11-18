@@ -13,6 +13,8 @@ export interface AppConfig {
   maxAttempts: number;
   attemptCooldownHours: number;
   remedialAfterFailures: number;
+  /** Umur maksimum submitResult (hari) sebelum dibersihkan scheduler. */
+  submitResultRetentionDays: number;
   emailProvider: string;
   emailFrom: string;
 }
@@ -42,6 +44,11 @@ export default registerAs(
     maxAttempts: Number(process.env.MAX_ATTEMPTS ?? 3),
     attemptCooldownHours: Number(process.env.ATTEMPT_COOLDOWN_HOURS ?? 24),
     remedialAfterFailures: Number(process.env.REMEDIAL_AFTER_FAILURES ?? 3),
+    // Retensi submitResult: JSON hasil submit disimpan untuk replay idempoten
+    // (mis. pengguna menekan submit dua kali), lalu dibersihkan terjadwal agar
+    // kolom JsonB tidak tumbuh tanpa batas. Default 90 hari — jauh di luar
+    // jendela wajar replay (detik sampai menit), dan mencukupi audit insiden.
+    submitResultRetentionDays: Number(process.env.SUBMIT_RESULT_RETENTION_DAYS ?? 90),
     emailProvider: process.env.EMAIL_PROVIDER ?? 'fake',
     emailFrom: process.env.EMAIL_FROM ?? '',
   }),

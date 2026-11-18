@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { validationSchema } from './config/env.validation';
@@ -47,6 +48,8 @@ import { ServicesModule } from './modules/services/services.module';
       },
     ]),
     DatabaseModule,
+    // Scheduler untuk pembersihan terjadwal (mis. retensi submitResult).
+    ScheduleModule.forRoot(),
     AuditModule,
     NotificationsModule,
     AuthModule,
